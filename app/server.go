@@ -24,16 +24,22 @@ type User struct {
 	Authenticated bool
 }
 
-var mmap = map[string]*Item{}
-var lmap = map[string][]string{}
-var umap = map[string]*User{}
+type ClientSession struct {
+	Connection      net.Conn
+	IsAuthenticated bool
+	UserName        string
+}
+
+var mmap = make(map[string]*Item)
+var lmap = make(map[string][]string)
+var umap = make(map[string]*User)
 var mu sync.RWMutex
 
 func main() {
 	fmt.Println("Logs from your program will appear here!")
 	umap["default"] = &User{Flags: []string{"nopass"}}
 
-	listener, err := net.Listen("tcp", "0.0.0.0:6379")
+	listener, err := net.Listen("tcp", ":6379")
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379")
 		os.Exit(1)
@@ -56,6 +62,24 @@ func handleConnection(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 	buf := make([]byte, 1024)
 
+	session := &ClientSession{
+		Connection:      conn,
+		IsAuthenticated: false,
+		UserName:        "default",
+	}
+
+	mu.RLock()
+	defaultUser, exists := umap["default"]
+	if exists {
+		for _, flag := range defaultUser.Flags {
+			if flag == "nopass" {
+				session.IsAuthenticated = true
+			}
+		}
+	}
+
+	mu.RUnlock()
+
 	for {
 		n, err := reader.Read(buf)
 		if err != nil {
@@ -67,7 +91,7 @@ func handleConnection(conn net.Conn) {
 			break
 		}
 
-		text := respParser(string(buf[:n]))
+		text := respParser(session, string(buf[:n]))
 
 		_, err = conn.Write([]byte(text))
 		if err != nil {
@@ -76,11 +100,16 @@ func handleConnection(conn net.Conn) {
 	}
 }
 
-func respParser(input string) string {
+func respParser(session *ClientSession, input string) string {
 	if input[0] == 42 {
 		arr := readArray(input)
 
-		switch strings.ToUpper(arr[0]) {
+		cmd := strings.ToUpper(arr[0])
+		if !session.IsAuthenticated && arr[0] != "AUTH" {
+			return "-NOAUTH Authentication required\r\n"
+		}
+
+		switch cmd {
 		case "ECHO":
 			return fmt.Sprintf("$%d\r\n%s\r\n", len(arr[1]), arr[1])
 
@@ -94,10 +123,10 @@ func respParser(input string) string {
 			return handleSet(arr)
 
 		case "ACL":
-			return handleAcl(arr)
+			return handleAcl(session, arr)
 
 		case "AUTH":
-			return handleAuth(arr)
+			return handleAuth(session, arr)
 
 		case "RPUSH":
 			return handlePush(arr, "right")
@@ -116,6 +145,12 @@ func respParser(input string) string {
 
 		case "BLPOP":
 			return handleBlpop(arr)
+
+		case "TYPE":
+			return handleType(arr)
+
+		case "XADD":
+			return handleXadd(arr)
 		}
 	}
 

@@ -6,9 +6,10 @@ import (
 	"strings"
 )
 
-func handleAcl(arr []string) string {
+func handleAcl(session *ClientSession, arr []string) string {
 	if strings.ToUpper(arr[1]) == "WHOAMI" {
-		return "$7\r\ndefault\r\n"
+		name := session.UserName
+		return fmt.Sprintf("$%d\r\n%s\r\n", len(name), name)
 	}
 
 	if strings.ToUpper(arr[1]) == "GETUSER" {
@@ -27,13 +28,13 @@ func handleAcl(arr []string) string {
 		flags_no := len(user.Flags)
 		returnStr := fmt.Sprintf("*4\r\n$5\r\nflags\r\n*%d\r\n", flags_no)
 		for _, flag := range user.Flags {
-			returnStr = returnStr + fmt.Sprintf("$%d\r\n%s\r\n", len(flag), flag)
+			returnStr += fmt.Sprintf("$%d\r\n%s\r\n", len(flag), flag)
 		}
 
 		passwords_no := len(user.Passwords)
-		returnStr = returnStr + fmt.Sprintf("$9\r\npasswords\r\n*%d\r\n", passwords_no)
+		returnStr += fmt.Sprintf("$9\r\npasswords\r\n*%d\r\n", passwords_no)
 		for _, password := range user.Passwords {
-			returnStr = returnStr + fmt.Sprintf("$%d\r\n%s\r\n", len(password), password)
+			returnStr += fmt.Sprintf("$%d\r\n%s\r\n", len(password), password)
 		}
 
 		return returnStr
@@ -70,7 +71,7 @@ func handleAcl(arr []string) string {
 	return ""
 }
 
-func handleAuth(arr []string) string {
+func handleAuth(session *ClientSession, arr []string) string {
 	if len(arr) < 3 {
 		return "-Missing parameters. Try AUTH <username> <password>.\r\n"
 	}
@@ -87,6 +88,8 @@ func handleAuth(arr []string) string {
 	h.Write([]byte(arr[2]))
 	encoded := fmt.Sprintf("%x", h.Sum(nil))
 	if encoded == user.Passwords[0] {
+		session.IsAuthenticated = true
+		session.UserName = arr[1]
 		return "+OK\r\n"
 	}
 

@@ -77,24 +77,24 @@ func handleXadd(arr []string) string {
 }
 
 func generateId(entries []*StreamEntry, rawId string) (string, string) {
-	var timeMs int64
+	var newMsTime int64
 
 	if rawId == "*" {
-		timeMs = time.Now().UnixMilli()
+		newMsTime = time.Now().UnixMilli()
 	} else {
 		ts, err := strconv.ParseInt(strings.Split(rawId, "-")[0], 10, 64)
 		if err != nil {
 			return "", "-ERR Failed to convert the miliseconds, invalid input\r\n"
 		}
 
-		timeMs = ts
+		newMsTime = ts
 	}
 
 	if len(entries) == 0 {
-		if timeMs == 0 {
-			return fmt.Sprintf("%d-1", timeMs), ""
+		if newMsTime == 0 {
+			return fmt.Sprintf("%d-1", newMsTime), ""
 		}
-		return fmt.Sprintf("%d-0", timeMs), ""
+		return fmt.Sprintf("%d-0", newMsTime), ""
 	}
 
 	lastElem := entries[len(entries)-1]
@@ -104,14 +104,14 @@ func generateId(entries []*StreamEntry, rawId string) (string, string) {
 		return "", errMsg
 	}
 
-	if timeMs == msTime {
-		return fmt.Sprintf("%d-%d", timeMs, (seqNo + 1)), ""
+	if newMsTime == msTime {
+		return fmt.Sprintf("%d-%d", newMsTime, (seqNo + 1)), ""
 	}
 
-	if timeMs < msTime {
+	if newMsTime < msTime {
 		return "", "-ERR Miliseconds part should be higher than the last elem's\r\n"
 	}
-	return fmt.Sprintf("%d-%d", timeMs, 0), ""
+	return fmt.Sprintf("%d-%d", newMsTime, 0), ""
 }
 
 func checkId(entries []*StreamEntry, id string) (bool, string) {
