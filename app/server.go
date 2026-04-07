@@ -28,6 +28,9 @@ type ClientSession struct {
 	Connection      net.Conn
 	IsAuthenticated bool
 	UserName        string
+	reader          bufio.Reader
+	buf             []byte
+	commandsQueue   []string
 }
 
 var mmap = make(map[string]*Item)
@@ -66,6 +69,8 @@ func handleConnection(conn net.Conn) {
 		Connection:      conn,
 		IsAuthenticated: false,
 		UserName:        "default",
+		reader:          *reader,
+		buf:             buf,
 	}
 
 	mu.RLock()
@@ -151,6 +156,21 @@ func respParser(session *ClientSession, input string) string {
 
 		case "XADD":
 			return handleXadd(arr)
+
+		case "INCR":
+			return handleIncr(arr)
+
+		case "MULTI":
+			handleMulti(session)
+
+		case "XRANGE":
+			return handleXrange(arr)
+
+		case "EXEC":
+			return "-ERR EXEC without MULTI\r\n"
+
+		case "DISCARD":
+			return "-ERR DISCARD without MULTI\r\n"
 		}
 	}
 
