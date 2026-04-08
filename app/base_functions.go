@@ -12,12 +12,11 @@ func readArray(respArray string) []string {
 	var returnArray []string
 
 	for _, elem := range splitedString[2:] {
-		if elem == "" || elem[0] == 36 {
+		if elem == "" || (len(elem) > 1 && elem[0] == 36) {
 			continue
 		}
 		returnArray = append(returnArray, elem)
 	}
-
 	return returnArray
 }
 

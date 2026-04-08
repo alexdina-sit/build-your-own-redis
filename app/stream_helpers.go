@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -104,13 +105,7 @@ func buildEntriesResp(entries []*StreamEntry) string {
 	addRespArrayHeader(&sb, len(entries))
 
 	for _, entry := range entries {
-		addRespArrayHeader(&sb, 2)
-		addRespString(&sb, entry.ID)
-		addRespArrayHeader(&sb, len(entry.Values))
-
-		for _, val := range entry.Values {
-			addRespString(&sb, val)
-		}
+		sb.WriteString(returnStreamEntryResp(entry))
 	}
 
 	return sb.String()
@@ -128,4 +123,89 @@ func returnStreamEntryResp(streamEntry *StreamEntry) string {
 	}
 
 	return sb.String()
+}
+
+func parseLimitId(id string, isMax bool) (int64, int64, error) {
+	if id == "-" {
+		return 0, 0, nil
+	}
+
+	if id == "+" {
+		return math.MaxInt64, math.MaxInt64, nil
+	}
+
+	parts := strings.Split(id, "-")
+	timestamp, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return 0, 0, errors.New("-ERR Failed to convert the miliseconds part\r\n")
+	}
+
+	if len(parts) == 1 {
+		if isMax {
+			return timestamp, math.MaxInt64, nil
+		}
+		return timestamp, 0, nil
+	}
+
+	sequence, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return 0, 0, errors.New("-ERR Failed to convert the sequence part\r\n")
+	}
+
+	return timestamp, sequence, nil
+}
+
+func xreadLastCase(ids, keys []string) []string {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	newIds := make([]string, len(ids))
+	for i, id := range ids {
+		if id == "$" {
+			stream, exists := streamMap[keys[i]]
+			if exists && len(stream.Entries) > 0 {
+				newIds[i] = fmt.Sprintf("%d-%d", stream.lastTimestamp, stream.lastSequenceNo)
+			} else {
+				newIds[i] = "0-0"
+			}
+		} else {
+			newIds[i] = id
+		}
+	}
+
+	return newIds
+}
+
+func checkForBlockingArgs(arr []string) (int64, int, error) {
+	var timeout int64 = -1
+	var blockIndex int = -1
+
+	for i, v := range arr {
+		if strings.ToUpper(v) == "BLOCK" {
+			blockIndex = i
+			break
+		}
+	}
+
+	if blockIndex != -1 {
+		t, err := strconv.ParseInt(arr[blockIndex+1], 10, 64)
+		if err != nil {
+			return -1, -1, errors.New("-ERR Invalid timeout value\r\n")
+		}
+		timeout = t
+	}
+
+	streamIndex := -1
+	for i, v := range arr {
+		if strings.ToUpper(v) == "STREAMS" {
+			streamIndex = i
+			break
+		}
+	}
+
+	if streamIndex == -1 {
+		return -1, -1, errors.New("-ERR syntax error\r\n")
+	}
+
+	return timeout, streamIndex, nil
 }

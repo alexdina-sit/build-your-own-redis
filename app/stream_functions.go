@@ -1,11 +1,9 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"math"
-	"strconv"
 	"strings"
+	"time"
 )
 
 type StreamEntry struct {
@@ -21,7 +19,7 @@ type Stream struct {
 	lastSequenceNo int64
 }
 
-var smap = make(map[string]*Stream)
+var streamMap = make(map[string]*Stream)
 
 func handleType(arr []string) string {
 	mu.RLock()
@@ -31,7 +29,7 @@ func handleType(arr []string) string {
 		return "+string\r\n"
 	}
 
-	if _, exists := smap[arr[1]]; exists {
+	if _, exists := streamMap[arr[1]]; exists {
 		return "+stream\r\n"
 
 	}
@@ -49,10 +47,10 @@ func handleXadd(arr []string) string {
 	mu.Lock()
 	defer mu.Unlock()
 
-	stream, exists := smap[streamKey]
+	stream, exists := streamMap[streamKey]
 	if !exists {
 		stream = &Stream{}
-		smap[streamKey] = stream
+		streamMap[streamKey] = stream
 	}
 
 	if strings.Contains(arr[2], "*") {
@@ -98,7 +96,7 @@ func handleXrange(arr []string) string {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	stream, exists := smap[stream_key]
+	stream, exists := streamMap[stream_key]
 	if !exists {
 		return "*0\r\n"
 	}
@@ -117,62 +115,69 @@ func handleXrange(arr []string) string {
 	return buildEntriesResp(filteredEntries)
 }
 
-func parseLimitId(id string, isMax bool) (int64, int64, error) {
-	if id == "-" {
-		return 0, 0, nil
-	}
-
-	if id == "+" {
-		return math.MaxInt64, math.MaxInt64, nil
-	}
-
-	parts := strings.Split(id, "-")
-	timestamp, err := strconv.ParseInt(parts[0], 10, 64)
-	if err != nil {
-		return 0, 0, errors.New("-ERR Failed to convert the miliseconds part\r\n")
-	}
-
-	if len(parts) == 1 {
-		if isMax {
-			return timestamp, math.MaxInt64, nil
-		}
-		return timestamp, 0, nil
-	}
-
-	sequence, err := strconv.ParseInt(parts[1], 10, 64)
-	if err != nil {
-		return 0, 0, errors.New("-ERR Failed to convert the sequence part\r\n")
-	}
-
-	return timestamp, sequence, nil
-}
-
 func handleXread(arr []string) string {
-	if len(arr) < 4 {
-		return "-Missing arguments. Please try: XREAD STREAMS <key> <id>\r\n"
-	}
-
-	stream_key, startId := arr[2], arr[3]
-
-	mu.RLock()
-	defer mu.RUnlock()
-
-	stream, exists := smap[stream_key]
-	if !exists {
-		return "*0\r\n"
-	}
-
-	parts := strings.Split(startId, "-")
-	if len(parts) < 2 {
-		return "-ERR Invalid ID, it should contains the timestamp and the sequence number.\r\n"
-	}
-
-	sequence, err := strconv.ParseInt(parts[1], 10, 64)
+	timeout, streamIndex, err := checkForBlockingArgs(arr)
 	if err != nil {
-		return "-ERR Failed to convert the sequence part\r\n"
+		return err.Error()
 	}
 
-	startId = fmt.Sprintf("%s-%d", parts[0], sequence+1)
-	stopId := fmt.Sprintf("%d-%d", stream.lastTimestamp, stream.lastSequenceNo)
-	return fmt.Sprintf("*1\r\n*2\r\n$%d\r\n%s\r\n", len(stream_key), stream_key) + handleXrange([]string{"XRANGE", stream_key, startId, stopId})
+	arguments := arr[streamIndex+1:]
+	if len(arr) < 4 {
+		return "-Missing arguments. Please try: XREAD STREAMS <key_1> <key_2> <id_1> <id_2>\r\n"
+	}
+
+	numStreams := len(arguments) / 2
+	keys := arguments[:numStreams]
+	ids := xreadLastCase(arguments[numStreams:], keys)
+
+	now := time.Now()
+	for {
+		var sb strings.Builder
+		streamsWithDataCount := 0
+
+		for index, stream_key := range keys {
+			mu.RLock()
+
+			stream, exists := streamMap[stream_key]
+			if !exists {
+				mu.RUnlock()
+				continue
+			}
+
+			startId := ids[index]
+			parts := strings.Split(startId, "-")
+
+			if len(parts) < 2 {
+				mu.RUnlock()
+				return "-ERR Invalid ID format\r\n"
+			}
+
+			timestamp, sequence, err := parseId(startId)
+			if err != nil {
+				return err.Error()
+			}
+
+			entries := getStreamEntries(stream, timestamp, (sequence + 1), stream.lastTimestamp, stream.lastSequenceNo)
+			mu.RUnlock()
+
+			if len(entries) > 0 {
+				streamsWithDataCount++
+				addRespArrayHeader(&sb, 2)
+				addRespString(&sb, stream_key)
+				sb.WriteString(buildEntriesResp(entries))
+			}
+		}
+
+		if streamsWithDataCount > 0 {
+			var finalResp strings.Builder
+			addRespArrayHeader(&finalResp, streamsWithDataCount)
+			finalResp.WriteString(sb.String())
+			return finalResp.String()
+		}
+
+		if (timeout == -1) || (timeout > 0 && time.Since(now).Milliseconds() >= timeout) {
+			return "*-1\r\n"
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
