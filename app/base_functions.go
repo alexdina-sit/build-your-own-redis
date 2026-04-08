@@ -52,22 +52,21 @@ func handleGet(arr []string) string {
 	item, prs := mmap[arr[1]]
 	mu.RUnlock()
 
-	if prs {
-		expireType := strings.ToUpper(item.ExpireType)
-		timeSpent := time.Since(item.CreateDate)
-
-		if (expireType == "EX" && timeSpent.Seconds() > float64(item.ExpireTime)) ||
-			(expireType == "PX" && timeSpent.Milliseconds() > int64(item.ExpireTime)) {
-
-			mu.Lock()
-			delete(mmap, arr[1])
-			mu.Unlock()
-
-			return "$-1\r\n"
-		}
-
-		return fmt.Sprintf("$%d\r\n%s\r\n", len(item.Value), item.Value)
-	} else {
+	if !prs {
 		return "$-1\r\n"
 	}
+	expireType := strings.ToUpper(item.ExpireType)
+	timeSpent := time.Since(item.CreateDate)
+
+	if (expireType == "EX" && timeSpent.Seconds() > float64(item.ExpireTime)) ||
+		(expireType == "PX" && timeSpent.Milliseconds() > int64(item.ExpireTime)) {
+
+		mu.Lock()
+		delete(mmap, arr[1])
+		mu.Unlock()
+
+		return "$-1\r\n"
+	}
+
+	return fmt.Sprintf("$%d\r\n%s\r\n", len(item.Value), item.Value)
 }

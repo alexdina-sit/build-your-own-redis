@@ -54,24 +54,28 @@ func handleMulti(session *ClientSession) {
 		}
 
 		text := string(buf[:n])
+		if strings.Contains(text, "DISCARD") {
+			_, err = conn.Write([]byte("+OK\r\n"))
+			session.commandsQueue = make([]string, 0)
+			return
+		}
+
 		if strings.Contains(text, "EXEC") {
+			if len(session.commandsQueue) == 0 {
+				_, err = conn.Write([]byte("*0\r\n"))
+				return
+			}
+
 			returnStr := fmt.Sprintf("*%d\r\n", len(session.commandsQueue))
 			for _, command := range session.commandsQueue {
 				returnStr += respParser(session, command)
 			}
-			if len(session.commandsQueue) == 0 {
-				_, err = conn.Write([]byte("*0\r\n"))
-				return
-			} else {
-				_, err = conn.Write([]byte(returnStr))
-			}
-		} else if strings.Contains(text, "DISCARD") {
-			_, err = conn.Write([]byte("+OK\r\n"))
-			session.commandsQueue = make([]string, 0)
+
+			_, err = conn.Write([]byte(returnStr))
 			return
-		} else {
-			session.commandsQueue = append(session.commandsQueue, text)
-			_, err = conn.Write([]byte("+QUEUED\r\n"))
 		}
+
+		session.commandsQueue = append(session.commandsQueue, text)
+		_, err = conn.Write([]byte("+QUEUED\r\n"))
 	}
 }

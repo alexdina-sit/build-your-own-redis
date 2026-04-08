@@ -147,15 +147,6 @@ func parseLimitId(id string, isMax bool) (int64, int64, error) {
 	return timestamp, sequence, nil
 }
 
-func returnStreamEntryResp(streamEntry *StreamEntry) string {
-	returnStr := fmt.Sprintf("*2\r\n$%d\r\n%s\r\n*%d\r\n", len(streamEntry.ID), streamEntry.ID, len(streamEntry.Values))
-	for _, value := range streamEntry.Values {
-		returnStr += fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)
-	}
-
-	return returnStr
-}
-
 func handleXread(arr []string) string {
 	if len(arr) < 4 {
 		return "-Missing arguments. Please try: XREAD STREAMS <key> <id>\r\n"

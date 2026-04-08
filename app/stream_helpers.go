@@ -100,14 +100,32 @@ func getStreamEntries(stream *Stream, minTimestamp, minSequence, maxTimestamp, m
 }
 
 func buildEntriesResp(entries []*StreamEntry) string {
-	resultStr := fmt.Sprintf("*%d\r\n", len(entries))
+	var sb strings.Builder
+	addRespArrayHeader(&sb, len(entries))
 
 	for _, entry := range entries {
-		resultStr += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n*%d\r\n", len(entry.ID), entry.ID, len(entry.Values))
+		addRespArrayHeader(&sb, 2)
+		addRespString(&sb, entry.ID)
+		addRespArrayHeader(&sb, len(entry.Values))
+
 		for _, val := range entry.Values {
-			resultStr += fmt.Sprintf("$%d\r\n%s\r\n", len(val), val)
+			addRespString(&sb, val)
 		}
 	}
 
-	return resultStr
+	return sb.String()
+}
+
+func returnStreamEntryResp(streamEntry *StreamEntry) string {
+	var sb strings.Builder
+
+	addRespArrayHeader(&sb, 2)
+	addRespString(&sb, streamEntry.ID)
+	addRespArrayHeader(&sb, len(streamEntry.Values))
+
+	for _, value := range streamEntry.Values {
+		addRespString(&sb, value)
+	}
+
+	return sb.String()
 }

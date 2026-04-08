@@ -20,24 +20,26 @@ func handleAcl(session *ClientSession, arr []string) string {
 		mu.RLock()
 		defer mu.RUnlock()
 
-		user, prs := umap[arr[2]]
+		user, prs := userMap[arr[2]]
 		if !prs {
 			return "*0\r\n"
 		}
 
-		flags_no := len(user.Flags)
-		returnStr := fmt.Sprintf("*4\r\n$5\r\nflags\r\n*%d\r\n", flags_no)
+		var sb strings.Builder
+		sb.WriteString("*4\r\n$5\r\nflags\r\n")
+		addRespArrayHeader(&sb, len(user.Flags))
+
 		for _, flag := range user.Flags {
-			returnStr += fmt.Sprintf("$%d\r\n%s\r\n", len(flag), flag)
+			addRespString(&sb, flag)
 		}
 
-		passwords_no := len(user.Passwords)
-		returnStr += fmt.Sprintf("$9\r\npasswords\r\n*%d\r\n", passwords_no)
+		sb.WriteString("$9\r\npasswords\r\n")
+		addRespArrayHeader(&sb, len(user.Passwords))
 		for _, password := range user.Passwords {
-			returnStr += fmt.Sprintf("$%d\r\n%s\r\n", len(password), password)
+			addRespString(&sb, password)
 		}
 
-		return returnStr
+		return sb.String()
 	}
 
 	if strings.ToUpper(arr[1]) == "SETUSER" {
@@ -55,16 +57,14 @@ func handleAcl(session *ClientSession, arr []string) string {
 		mu.Lock()
 		defer mu.Unlock()
 
-		umap[arr[2]] = &User{}
+		userMap[arr[2]] = &User{}
 		if len(password) > 0 {
-			umap[arr[2]].Passwords = append(umap[arr[2]].Passwords, password)
-			umap[arr[2]].Flags = make([]string, 0)
+			userMap[arr[2]].Passwords = append(userMap[arr[2]].Passwords, password)
+			userMap[arr[2]].Flags = make([]string, 0)
 		} else {
-			umap[arr[2]].Passwords = make([]string, 0)
-			umap[arr[2]].Flags = append(umap[arr[2]].Flags, "nopass")
+			userMap[arr[2]].Passwords = make([]string, 0)
+			userMap[arr[2]].Flags = append(userMap[arr[2]].Flags, "nopass")
 		}
-
-		umap[arr[2]].Authenticated = true
 		return "+OK\r\n"
 	}
 
@@ -79,7 +79,7 @@ func handleAuth(session *ClientSession, arr []string) string {
 	mu.Lock()
 	defer mu.Unlock()
 
-	user, prs := umap[arr[1]]
+	user, prs := userMap[arr[1]]
 	if !prs {
 		return "-User doesn't exist"
 	}

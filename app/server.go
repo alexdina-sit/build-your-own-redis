@@ -33,14 +33,16 @@ type ClientSession struct {
 	commandsQueue   []string
 }
 
+const CRLF = "\r\n"
+
 var mmap = make(map[string]*Item)
-var lmap = make(map[string][]string)
-var umap = make(map[string]*User)
+var listMap = make(map[string][]string)
+var userMap = make(map[string]*User)
 var mu sync.RWMutex
 
 func main() {
 	fmt.Println("Logs from your program will appear here!")
-	umap["default"] = &User{Flags: []string{"nopass"}}
+	userMap["default"] = &User{Flags: []string{"nopass"}}
 
 	listener, err := net.Listen("tcp", ":6379")
 	if err != nil {
@@ -74,7 +76,7 @@ func handleConnection(conn net.Conn) {
 	}
 
 	mu.RLock()
-	defaultUser, exists := umap["default"]
+	defaultUser, exists := userMap["default"]
 	if exists {
 		for _, flag := range defaultUser.Flags {
 			if flag == "nopass" {

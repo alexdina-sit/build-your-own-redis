@@ -3,10 +3,18 @@ package main
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
-func handlePush(arr []string, direction string) string {
+type Direction string
+
+const (
+	Left  Direction = "left"
+	Right Direction = "right"
+)
+
+func handlePush(arr []string, direction Direction) string {
 	if len(arr) < 3 {
 		fmt.Println("Missing arguments, your input should be: RPUSH <lname> <value_1>..")
 		return "$-1\r\n"
@@ -16,13 +24,15 @@ func handlePush(arr []string, direction string) string {
 	defer mu.Unlock()
 	for _, val := range arr[2:] {
 
-		if direction == "right" {
-			lmap[arr[1]] = append(lmap[arr[1]], val)
-		} else {
-			lmap[arr[1]] = append([]string{val}, lmap[arr[1]]...)
+		if direction == Right {
+			listMap[arr[1]] = append(listMap[arr[1]], val)
+			continue
 		}
+
+		listMap[arr[1]] = append([]string{val}, listMap[arr[1]]...)
+
 	}
-	return fmt.Sprintf(":%d\r\n", len(lmap[arr[1]]))
+	return fmt.Sprintf(":%d\r\n", len(listMap[arr[1]]))
 }
 
 func handleLrange(arr []string) string {
@@ -46,7 +56,7 @@ func handleLrange(arr []string) string {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	value, prs := lmap[arr[1]]
+	value, prs := listMap[arr[1]]
 	if !prs {
 		return "*0\r\n"
 	}
@@ -76,11 +86,13 @@ func handleLrange(arr []string) string {
 		stop = listLen - 1
 	}
 
-	returnStr := fmt.Sprintf("*%d\r\n", stop-start+1)
+	var sb strings.Builder
+	addRespArrayHeader(&sb, (stop - start + 1))
+
 	for i := start; i <= stop; i++ {
-		returnStr += fmt.Sprintf("$%d\r\n%s\r\n", len(value[i]), value[i])
+		addRespString(&sb, value[i])
 	}
-	return returnStr
+	return sb.String()
 }
 
 func handleLlen(arr []string) string {
@@ -90,7 +102,7 @@ func handleLlen(arr []string) string {
 
 	mu.RLock()
 	defer mu.RUnlock()
-	return fmt.Sprintf(":%d\r\n", len(lmap[arr[1]]))
+	return fmt.Sprintf(":%d\r\n", len(listMap[arr[1]]))
 }
 
 func handleLpop(arr []string) string {
@@ -100,7 +112,7 @@ func handleLpop(arr []string) string {
 
 	mu.Lock()
 	defer mu.Unlock()
-	sl, prs := lmap[arr[1]]
+	sl, prs := listMap[arr[1]]
 	if !prs || len(sl) == 0 {
 		return "$-1\r\n"
 	}
@@ -110,35 +122,37 @@ func handleLpop(arr []string) string {
 		sl = sl[1:]
 
 		if len(sl) == 0 {
-			delete(lmap, arr[1])
+			delete(listMap, arr[1])
 		} else {
-			lmap[arr[1]] = sl
+			listMap[arr[1]] = sl
 		}
 		return fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)
-	} else {
-		stop, err := strconv.Atoi(arr[2])
-		if err != nil {
-			fmt.Println("Error while converting your argument")
-			return "$-1\r\n"
-		}
-
-		if stop > len(sl) {
-			stop = len(sl)
-		}
-
-		returnStr := fmt.Sprintf("*%d\r\n", stop)
-		for i := 0; i < stop; i++ {
-			returnStr += fmt.Sprintf("$%d\r\n%s\r\n", len(sl[i]), sl[i])
-		}
-
-		sl = sl[stop:]
-		if len(sl) == 0 {
-			delete(lmap, arr[1])
-		} else {
-			lmap[arr[1]] = sl
-		}
-		return returnStr
 	}
+	stop, err := strconv.Atoi(arr[2])
+	if err != nil {
+		fmt.Println("Error while converting your argument")
+		return "$-1\r\n"
+	}
+
+	if stop > len(sl) {
+		stop = len(sl)
+	}
+
+	var sb strings.Builder
+	addRespArrayHeader(&sb, stop)
+
+	for i := 0; i < stop; i++ {
+		addRespString(&sb, sl[i])
+	}
+
+	sl = sl[stop:]
+	if len(sl) == 0 {
+		delete(listMap, arr[1])
+	} else {
+		listMap[arr[1]] = sl
+	}
+	return sb.String()
+
 }
 
 func handleBlpop(arr []string) string {
@@ -155,14 +169,14 @@ func handleBlpop(arr []string) string {
 	now := time.Now()
 	for timeout == 0 || time.Since(now).Seconds() < timeout {
 		mu.Lock()
-		sl := lmap[arr[1]]
+		sl := listMap[arr[1]]
 		if len(sl) > 0 {
 			value := sl[0]
 			sl = sl[1:]
 			if len(sl) == 0 {
-				delete(lmap, arr[1])
+				delete(listMap, arr[1])
 			} else {
-				lmap[arr[1]] = sl
+				listMap[arr[1]] = sl
 			}
 
 			mu.Unlock()
