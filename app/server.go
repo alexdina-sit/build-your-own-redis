@@ -107,14 +107,6 @@ func handleConnection(conn net.Conn) {
 	}
 }
 
-// var commandsMap map[string]func(arr ...string) string = map[string]func(arr ...string) string{
-// 	"ECHO": echo,
-// }
-
-// func echo(arr ...string) string {
-// 	return fmt.Sprintf("$%d\r\n%s\r\n", len(arr[1]), arr[1])
-// }
-
 func respParser(session *ClientSession, input string) string {
 	if input[0] == 42 {
 		arr := readArray(input)
@@ -123,12 +115,6 @@ func respParser(session *ClientSession, input string) string {
 		if !session.IsAuthenticated && arr[0] != "AUTH" {
 			return "-NOAUTH Authentication required\r\n"
 		}
-
-		// funcToRun, found := commandsMap[cmd]
-		// if !found {
-		// 	//return err
-		// }
-		// funcToRun(arr...)
 
 		switch cmd {
 		case "ECHO":
@@ -193,6 +179,21 @@ func respParser(session *ClientSession, input string) string {
 
 		case "XREAD":
 			return handleXread(arr)
+
+		case "ZRANK":
+			return handleZrank(arr)
+
+		case "ZCARD":
+			return handleZcard(arr)
+
+		case "ZRANGE":
+			return handleZrange(arr)
+
+		case "ZSCORE":
+			return handleZscore(arr)
+
+		case "ZREM":
+			return handleZrem(arr)
 		}
 	}
 
