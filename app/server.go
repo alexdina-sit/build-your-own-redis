@@ -194,6 +194,18 @@ func respParser(session *ClientSession, input string) string {
 
 		case "ZREM":
 			return handleZrem(arr)
+
+		case "GEOADD":
+			return handleGeoadd(arr)
+
+		case "GEOPOS":
+			return handleGeopos(arr)
+
+		case "GEODIST":
+			return handleGeodist(arr)
+
+		case "GEOSEARCH":
+			return handleGeosearch(arr)
 		}
 	}
 
