@@ -2,118 +2,24 @@ package main
 
 import (
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 )
 
-type Element struct {
-	Member string
-	Score  float64
-}
-
-type SortedSet struct {
-	elements []*Element
-	dict     map[string]*Element
-}
-
-func NewSortedSet() *SortedSet {
-	return &SortedSet{
-		elements: make([]*Element, 0),
-		dict:     make(map[string]*Element),
-	}
-}
-
-func (s *SortedSet) AddOrUpdate(member string, score float64) int {
-	returnValue := 0
-
-	if existingElem, exists := s.dict[member]; exists {
-		if existingElem.Score == score {
-			return 0
-		}
-
-		for i, e := range s.elements {
-			if e.Member == member {
-				s.elements = append(s.elements[:i], s.elements[i+1:]...)
-				break
-			}
-		}
-	} else {
-		returnValue = 1
-	}
-
-	newElem := &Element{
-		Member: member,
-		Score:  score,
-	}
-	s.dict[member] = newElem
-
-	index := sort.Search(len(s.elements), func(i int) bool {
-		if s.elements[i].Score == score {
-			return s.elements[i].Member >= member
-		}
-		return s.elements[i].Score > score
-	})
-
-	s.elements = append(s.elements, nil)
-	copy(s.elements[index+1:], s.elements[index:])
-	s.elements[index] = newElem
-
-	return returnValue
-}
-
-func (s *SortedSet) GetMemberRank(member string) (int, bool) {
-	for index, elem := range s.elements {
-		if elem.Member == member {
-			return index, true
-		}
-	}
-
-	return 0, false
-}
-
-func (s *SortedSet) GetMemberScore(member string) (float64, bool) {
-	elem, exists := s.dict[member]
-	if !exists {
-		return 0, false
-	}
-
-	return elem.Score, true
-}
-
-func (s *SortedSet) RemoveMember(member string) int {
-	_, exists := s.dict[member]
-	if !exists {
-		return -1
-	}
-
-	delete(s.dict, member)
-
-	for index, elem := range s.elements {
-		if elem.Member == member {
-			s.elements = append(s.elements[:index], s.elements[index+1:]...)
-			return 1
-		}
-	}
-	return -1
-}
-
-var setMap = make(map[string]*SortedSet)
-
-func handleZadd(arr []string) string {
+func (server *Server) handleZadd(arr []string) string {
 	if len(arr) < 4 || (len(arr)-2)%2 != 0 {
 		return "-ERR syntax error. Please try: ZADD <zset_key> <score> <member>\r\n"
 	}
 
 	setKey := arr[1]
 
-	mu.Lock()
-	defer mu.Unlock()
+	server.mu.Lock()
+	defer server.mu.Unlock()
 
-	set, prs := setMap[setKey]
+	set, prs := server.zsetsMap[setKey]
 	if !prs {
 		set = NewSortedSet()
-		setMap[setKey] = set
+		server.zsetsMap[setKey] = set
 	}
 
 	addedCount := 0
@@ -130,17 +36,17 @@ func handleZadd(arr []string) string {
 	return fmt.Sprintf(":%d\r\n", addedCount)
 }
 
-func handleZrank(arr []string) string {
+func (server *Server) handleZrank(arr []string) string {
 	if len(arr) < 3 {
 		return "-ERR syntax error. Please try: ZRANK <zset_key> <zset_member>\r\n"
 	}
 
 	zsetKey, zsetMember := arr[1], arr[2]
 
-	mu.RLock()
-	defer mu.RUnlock()
+	server.mu.RLock()
+	defer server.mu.RUnlock()
 
-	set, exists := setMap[zsetKey]
+	set, exists := server.zsetsMap[zsetKey]
 	if !exists {
 		return "$-1\r\n"
 	}
@@ -153,16 +59,16 @@ func handleZrank(arr []string) string {
 	return fmt.Sprintf(":%d\r\n", memberRank)
 }
 
-func handleZcard(arr []string) string {
+func (server *Server) handleZcard(arr []string) string {
 	if len(arr) < 2 {
 		return "-ERR Invalid syntax. Please try: ZCARD <zset_key>"
 	}
 
-	mu.RLock()
-	defer mu.RUnlock()
+	server.mu.RLock()
+	defer server.mu.RUnlock()
 
 	zsetKey := arr[1]
-	set, exists := setMap[zsetKey]
+	set, exists := server.zsetsMap[zsetKey]
 	if !exists {
 		return ":0\r\n"
 	}
@@ -170,7 +76,7 @@ func handleZcard(arr []string) string {
 	return fmt.Sprintf(":%d\r\n", len(set.elements))
 }
 
-func handleZrange(arr []string) string {
+func (server *Server) handleZrange(arr []string) string {
 	if len(arr) < 4 {
 		return "-ERR Syntax error. Please try: ZRANG <zset_key> <start> <stop>\r\n"
 	}
@@ -183,10 +89,10 @@ func handleZrange(arr []string) string {
 		return "-ERR Invalid start / stop indexes. Please try again with integer values\r\n"
 	}
 
-	mu.RLock()
-	defer mu.RUnlock()
+	server.mu.RLock()
+	defer server.mu.RUnlock()
 
-	set, exists := setMap[zsetKey]
+	set, exists := server.zsetsMap[zsetKey]
 	if !exists {
 		return "*0\r\n"
 	}
@@ -225,16 +131,16 @@ func handleZrange(arr []string) string {
 	return sb.String()
 }
 
-func handleZscore(arr []string) string {
+func (server *Server) handleZscore(arr []string) string {
 	if len(arr) < 3 {
 		return "-ERR Invalid syntax. Please try: ZSCORE <zset_key> <zset_member>"
 	}
 
-	mu.RLock()
-	defer mu.RUnlock()
+	server.mu.RLock()
+	defer server.mu.RUnlock()
 
 	zsetKey, zsetMember := arr[1], arr[2]
-	set, exists := setMap[zsetKey]
+	set, exists := server.zsetsMap[zsetKey]
 	if !exists {
 		return "$-1\r\n"
 	}
@@ -248,16 +154,16 @@ func handleZscore(arr []string) string {
 	return fmt.Sprintf("$%d\r\n%s\r\n", len(scoreStr), scoreStr)
 }
 
-func handleZrem(arr []string) string {
+func (server *Server) handleZrem(arr []string) string {
 	if len(arr) < 3 {
 		return "-ERR Invalid syntax. Please try: ZREM <zset_key> <zset_member1>..\r\n"
 	}
 
-	mu.Lock()
-	defer mu.Unlock()
+	server.mu.Lock()
+	defer server.mu.Unlock()
 
 	zsetKey := arr[1]
-	set, exists := setMap[zsetKey]
+	set, exists := server.zsetsMap[zsetKey]
 	if !exists {
 		return ":0\r\n"
 	}
@@ -270,7 +176,7 @@ func handleZrem(arr []string) string {
 	}
 
 	if len(set.elements) == 0 {
-		delete(setMap, zsetKey)
+		delete(server.zsetsMap, zsetKey)
 	}
 
 	return fmt.Sprintf(":%d\r\n", removedMembersCount)

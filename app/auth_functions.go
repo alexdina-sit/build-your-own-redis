@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func handleAcl(session *ClientSession, arr []string) string {
+func (server *Server) handleAcl(session *ClientSession, arr []string) string {
 	if strings.ToUpper(arr[1]) == "WHOAMI" {
 		name := session.UserName
 		return fmt.Sprintf("$%d\r\n%s\r\n", len(name), name)
@@ -17,10 +17,10 @@ func handleAcl(session *ClientSession, arr []string) string {
 			return "-You must provide the user name. Syntax: ACL GETUSER <username>.\r\n"
 		}
 
-		mu.RLock()
-		defer mu.RUnlock()
+		server.mu.RLock()
+		defer server.mu.RUnlock()
 
-		user, prs := userMap[arr[2]]
+		user, prs := server.usersMap[arr[2]]
 		if !prs {
 			return "*0\r\n"
 		}
@@ -54,16 +54,16 @@ func handleAcl(session *ClientSession, arr []string) string {
 			password = fmt.Sprintf("%x", h.Sum(nil))
 		}
 
-		mu.Lock()
-		defer mu.Unlock()
+		server.mu.Lock()
+		defer server.mu.Unlock()
 
-		userMap[arr[2]] = &User{}
+		server.usersMap[arr[2]] = &User{}
 		if len(password) > 0 {
-			userMap[arr[2]].Passwords = append(userMap[arr[2]].Passwords, password)
-			userMap[arr[2]].Flags = make([]string, 0)
+			server.usersMap[arr[2]].Passwords = append(server.usersMap[arr[2]].Passwords, password)
+			server.usersMap[arr[2]].Flags = make([]string, 0)
 		} else {
-			userMap[arr[2]].Passwords = make([]string, 0)
-			userMap[arr[2]].Flags = append(userMap[arr[2]].Flags, "nopass")
+			server.usersMap[arr[2]].Passwords = make([]string, 0)
+			server.usersMap[arr[2]].Flags = append(server.usersMap[arr[2]].Flags, "nopass")
 		}
 		return "+OK\r\n"
 	}
@@ -71,15 +71,15 @@ func handleAcl(session *ClientSession, arr []string) string {
 	return ""
 }
 
-func handleAuth(session *ClientSession, arr []string) string {
+func (server *Server) handleAuth(session *ClientSession, arr []string) string {
 	if len(arr) < 3 {
 		return "-Missing parameters. Try AUTH <username> <password>.\r\n"
 	}
 
-	mu.Lock()
-	defer mu.Unlock()
+	server.mu.Lock()
+	defer server.mu.Unlock()
 
-	user, prs := userMap[arr[1]]
+	user, prs := server.usersMap[arr[1]]
 	if !prs {
 		return "-User doesn't exist"
 	}

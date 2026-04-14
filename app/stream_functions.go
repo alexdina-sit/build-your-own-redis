@@ -6,37 +6,43 @@ import (
 	"time"
 )
 
-type StreamEntry struct {
-	ID         string
-	Values     []string
-	timestamp  int64
-	sequenceNo int64
+func (server *Server) xreadLastCase(ids, keys []string) []string {
+	server.mu.RLock()
+	defer server.mu.RUnlock()
+
+	newIds := make([]string, len(ids))
+	for i, id := range ids {
+		if id == "$" {
+			stream, exists := server.streamsMap[keys[i]]
+			if exists && len(stream.Entries) > 0 {
+				newIds[i] = fmt.Sprintf("%d-%d", stream.lastTimestamp, stream.lastSequenceNo)
+			} else {
+				newIds[i] = "0-0"
+			}
+		} else {
+			newIds[i] = id
+		}
+	}
+
+	return newIds
 }
 
-type Stream struct {
-	Entries        []*StreamEntry
-	lastTimestamp  int64
-	lastSequenceNo int64
-}
+func (server *Server) handleType(arr []string) string {
+	server.mu.RLock()
+	defer server.mu.RUnlock()
 
-var streamMap = make(map[string]*Stream)
-
-func handleType(arr []string) string {
-	mu.RLock()
-	defer mu.RUnlock()
-
-	if _, exists := mmap[arr[1]]; exists {
+	if _, exists := server.itemsMap[arr[1]]; exists {
 		return "+string\r\n"
 	}
 
-	if _, exists := streamMap[arr[1]]; exists {
+	if _, exists := server.streamsMap[arr[1]]; exists {
 		return "+stream\r\n"
 
 	}
 	return "+none\r\n"
 }
 
-func handleXadd(arr []string) string {
+func (server *Server) handleXadd(arr []string) string {
 	if len(arr) < 5 || (len(arr)-3)%2 != 0 {
 		return "-Missing arguments. Try: XADD <stream_key> <id> <key> <value>...\r\n"
 	}
@@ -44,13 +50,13 @@ func handleXadd(arr []string) string {
 	streamKey := arr[1]
 	id := arr[2]
 
-	mu.Lock()
-	defer mu.Unlock()
+	server.mu.Lock()
+	defer server.mu.Unlock()
 
-	stream, exists := streamMap[streamKey]
+	stream, exists := server.streamsMap[streamKey]
 	if !exists {
 		stream = &Stream{}
-		streamMap[streamKey] = stream
+		server.streamsMap[streamKey] = stream
 	}
 
 	if strings.Contains(arr[2], "*") {
@@ -86,17 +92,17 @@ func handleXadd(arr []string) string {
 	return fmt.Sprintf("$%d\r\n%s\r\n", len(id), id)
 }
 
-func handleXrange(arr []string) string {
+func (server *Server) handleXrange(arr []string) string {
 	if len(arr) < 4 {
 		return "-Missing arguments. Please try: XRANGE <stream_key> <start> <stop>\r\n"
 	}
 
 	stream_key, startId, stopId := arr[1], arr[2], arr[3]
 
-	mu.RLock()
-	defer mu.RUnlock()
+	server.mu.RLock()
+	defer server.mu.RUnlock()
 
-	stream, exists := streamMap[stream_key]
+	stream, exists := server.streamsMap[stream_key]
 	if !exists {
 		return "*0\r\n"
 	}
@@ -115,7 +121,7 @@ func handleXrange(arr []string) string {
 	return buildEntriesResp(filteredEntries)
 }
 
-func handleXread(arr []string) string {
+func (server *Server) handleXread(arr []string) string {
 	timeout, streamIndex, err := checkForBlockingArgs(arr)
 	if err != nil {
 		return err.Error()
@@ -128,7 +134,7 @@ func handleXread(arr []string) string {
 
 	numStreams := len(arguments) / 2
 	keys := arguments[:numStreams]
-	ids := xreadLastCase(arguments[numStreams:], keys)
+	ids := server.xreadLastCase(arguments[numStreams:], keys)
 
 	now := time.Now()
 	for {
@@ -136,11 +142,11 @@ func handleXread(arr []string) string {
 		streamsWithDataCount := 0
 
 		for index, stream_key := range keys {
-			mu.RLock()
+			server.mu.RLock()
 
-			stream, exists := streamMap[stream_key]
+			stream, exists := server.streamsMap[stream_key]
 			if !exists {
-				mu.RUnlock()
+				server.mu.RUnlock()
 				continue
 			}
 
@@ -148,7 +154,7 @@ func handleXread(arr []string) string {
 			parts := strings.Split(startId, "-")
 
 			if len(parts) < 2 {
-				mu.RUnlock()
+				server.mu.RUnlock()
 				return "-ERR Invalid ID format\r\n"
 			}
 
@@ -158,7 +164,7 @@ func handleXread(arr []string) string {
 			}
 
 			entries := getStreamEntries(stream, timestamp, (sequence + 1), stream.lastTimestamp, stream.lastSequenceNo)
-			mu.RUnlock()
+			server.mu.RUnlock()
 
 			if len(entries) > 0 {
 				streamsWithDataCount++

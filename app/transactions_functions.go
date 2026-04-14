@@ -7,16 +7,16 @@ import (
 	"strings"
 )
 
-func handleIncr(arr []string) string {
+func (server *Server) handleIncr(arr []string) string {
 	if len(arr) < 2 {
 		return "-Missing arguments. Try INCR <key>"
 	}
 
-	mu.Lock()
-	defer mu.Unlock()
-	item, prs := mmap[arr[1]]
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	item, prs := server.itemsMap[arr[1]]
 	if !prs {
-		mmap[arr[1]] = &Item{
+		server.itemsMap[arr[1]] = &Item{
 			Value: "1",
 		}
 		return ":1\r\n"
@@ -28,11 +28,11 @@ func handleIncr(arr []string) string {
 	}
 
 	value += 1
-	mmap[arr[1]].Value = fmt.Sprintf("%d", value)
+	server.itemsMap[arr[1]].Value = fmt.Sprintf("%d", value)
 	return fmt.Sprintf(":%d\r\n", value)
 }
 
-func handleMulti(session *ClientSession) {
+func (server *Server) handleMulti(session *ClientSession) {
 	reader := session.reader
 	buf := session.buf
 	conn := session.Connection
