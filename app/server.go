@@ -23,6 +23,7 @@ func main() {
 		masterHost, masterPort, err := getMasterAddress(*replicaFlag)
 		if err != nil {
 			fmt.Println(err.Error())
+			os.Exit(1)
 		}
 
 		go handshake(masterHost, masterPort)
@@ -72,17 +73,16 @@ func handleConnection(conn net.Conn) {
 	server.mu.RUnlock()
 
 	for {
-		n, err := reader.Read(buf)
+		cmd, err := readRespCommand(reader)
 		if err != nil {
 			if err == io.EOF {
 				break
 			}
-
 			fmt.Println("Read error:", err)
 			break
 		}
 
-		text := respParser(session, string(buf[:n]))
+		text := respParser(session, string(cmd))
 		_, err = conn.Write([]byte(text))
 		if err != nil {
 			fmt.Println("Write error:", err)

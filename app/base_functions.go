@@ -82,8 +82,15 @@ func respParser(session *ClientSession, input string) string {
 			return server.handleGet(arr)
 
 		case "SET":
-			return server.handleSet(arr)
+			{
+				response := server.handleSet(arr)
 
+				if server.Role == "master" {
+					server.propagate(input)
+				}
+
+				return response
+			}
 		case "ACL":
 			return server.handleAcl(session, arr)
 
@@ -166,10 +173,13 @@ func respParser(session *ClientSession, input string) string {
 			return server.handleInfo(arr)
 
 		case "REPLCONF":
-			return server.handleReplconf()
+			return server.handleReplconf(session, arr)
 
 		case "PSYNC":
 			server.handlePsync(session)
+
+		case "WAIT":
+			return server.handleWait(arr)
 		}
 	}
 

@@ -37,6 +37,8 @@ type ClientSession struct {
 	reader          bufio.Reader
 	buf             []byte
 	commandsQueue   []string
+	IsReplica       bool
+	ReplOffset      int
 }
 
 type Element struct {
@@ -149,6 +151,8 @@ type Server struct {
 	MasterReplOffset int
 	mu               sync.RWMutex
 
+	replicas []*ClientSession
+
 	itemsMap   map[string]*Item
 	usersMap   map[string]*User
 	listsMap   map[string][]string
@@ -164,7 +168,6 @@ var (
 func GetServerInstance() *Server {
 	once.Do(
 		func() {
-
 			serverInstance = &Server{
 				Role:             "master",
 				MasterReplId:     "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",

@@ -5,9 +5,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func getMasterAddress(replicaofArgs string) (string, string, error) {
@@ -49,40 +51,50 @@ func handshake(masterHost string, masterPort string) {
 		return
 	}
 
-	defer conn.Close()
 	reader := bufio.NewReader(conn)
-	buf := make([]byte, 1024)
 
-	// Handshake #1 - Send PING
 	conn.Write([]byte("*1\r\n$4\r\nPING\r\n"))
-	_, err = reader.Read(buf)
-	if err != nil {
-		fmt.Println("Failed to receive a response for PING")
-		return
-	}
+	reader.ReadString('\n')
 
-	// Handshake #2 - Send REPLCONF #1
 	conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n"))
-	_, err = reader.Read(buf)
-	if err != nil {
-		fmt.Println("Failed to receive a response for REPLCONF #1")
-		return
-	}
+	reader.ReadString('\n')
 
-	// Handshake #2 - Send REPLCONF #2
 	conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n"))
-	_, err = reader.Read(buf)
+	reader.ReadString('\n')
+
+	conn.Write([]byte("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"))
+	reader.ReadString('\n')
+
+	line, err := reader.ReadString('\n')
+	rdbLen, err := strconv.Atoi(strings.TrimSpace(line[1:]))
 	if err != nil {
-		fmt.Println("Failed to receive a response for REPLCONF #2")
-		return
+		fmt.Println("Failed to convert the RDB size")
 	}
 
-	// Handshake #3 - Send PSYNC
-	conn.Write([]byte("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"))
-	_, err = reader.Read(buf)
-	if err != nil {
-		fmt.Println("Failed to receive a response for REPSYNC")
-		return
+	buf := make([]byte, rdbLen)
+	io.ReadFull(reader, buf)
+
+	session := &ClientSession{
+		Connection:      conn,
+		IsReplica:       true,
+		IsAuthenticated: true,
+	}
+
+	for {
+		cmd, err := readRespCommand(reader)
+		if err != nil {
+			if err != io.EOF {
+				fmt.Println(err.Error())
+			}
+			break
+		}
+
+		response := respParser(session, cmd)
+		if strings.Contains(response, "REPLCONF") {
+			conn.Write([]byte(response))
+		}
+
+		session.ReplOffset += len([]byte(cmd))
 	}
 }
 
@@ -93,10 +105,102 @@ func (server *Server) handlePsync(session *ClientSession) {
 	resyncMessage := fmt.Sprintf("+FULLRESYNC %s %d\r\n", server.MasterReplId, server.MasterReplOffset)
 	session.Connection.Write([]byte(resyncMessage))
 
-	rdbMessage := fmt.Sprintf("$%d\r\n%s", len(rdbBytes), rdbBytes)
-	session.Connection.Write([]byte(rdbMessage))
+	session.Connection.Write(fmt.Appendf(nil, "$%d\r\n", len(rdbBytes)))
+	session.Connection.Write(rdbBytes)
+
+	session.IsReplica = true
+
+	server.mu.Lock()
+	server.replicas = append(server.replicas, session)
+	server.mu.Unlock()
 }
 
-func (server *Server) handleReplconf() string {
+func (server *Server) handleReplconf(session *ClientSession, arr []string) string {
+	if len(arr) < 1 {
+		return "-ERR Invalid arguments"
+	}
+
+	arg := strings.ToUpper(arr[1])
+
+	if arg == "GETACK" {
+		replOffset := strconv.Itoa(session.ReplOffset)
+		return fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$%d\r\n%s\r\n", len(replOffset), replOffset)
+	}
+
+	if arg == "ACK" {
+		offset, err := strconv.Atoi(arr[2])
+		if err != nil {
+			return "-ERR Failed to convert replica offset\r\n"
+		}
+
+		session.ReplOffset = offset
+		return ""
+	}
+
 	return "+OK\r\n"
+}
+
+func (server *Server) propagate(cmd string) {
+	server.mu.Lock()
+	defer server.mu.Unlock()
+
+	server.MasterReplOffset += len([]byte(cmd))
+
+	for _, replica := range server.replicas {
+		_, err := replica.Connection.Write([]byte(cmd))
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+	}
+}
+
+func (server *Server) handleWait(arr []string) string {
+	if len(arr) < 3 {
+		return "-ERR Missing arguments. Please try: WAIT <num> <timeout>\r\n"
+	}
+
+	numReplicas, err := strconv.Atoi(arr[1])
+	if err != nil {
+		return "-ERR Invalid argument for num of replicas, it should be an integer\r\n"
+	}
+	timeout, err := strconv.Atoi(arr[2])
+	if err != nil {
+		return "-ERR Invalid timeout. It should be an integer\r\n"
+	}
+
+	if server.MasterReplOffset == 0 {
+		server.mu.RLock()
+		count := len(server.replicas)
+		server.mu.RUnlock()
+		return fmt.Sprintf(":%d\r\n", count)
+	}
+
+	server.mu.RLock()
+	for _, replica := range server.replicas {
+		replica.Connection.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n"))
+	}
+	server.mu.RUnlock()
+
+	start := time.Now()
+	for {
+		done := 0
+
+		server.mu.RLock()
+		for _, replica := range server.replicas {
+			if replica.ReplOffset >= server.MasterReplOffset {
+				done++
+			}
+		}
+		server.mu.RUnlock()
+
+		if done >= numReplicas {
+			return fmt.Sprintf(":%d\r\n", done)
+		}
+
+		if timeout > 0 && time.Since(start) > time.Duration(timeout)*time.Millisecond {
+			return fmt.Sprintf(":%d\r\n", done)
+		}
+
+		time.Sleep(10 * time.Millisecond)
+	}
 }

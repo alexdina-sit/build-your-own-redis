@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"io"
 	"strconv"
 	"strings"
 )
@@ -30,4 +32,69 @@ func processRespArray(respArray string) []string {
 		returnArray = append(returnArray, elem)
 	}
 	return returnArray
+}
+
+func readRespCommand(reader *bufio.Reader) (string, error) {
+	var sb strings.Builder
+
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+
+	if len(line) == 0 {
+		return "", io.EOF
+	}
+
+	sb.WriteString(line)
+
+	switch line[0] {
+	case '*':
+		count, err := strconv.Atoi(strings.TrimSpace(line[1:]))
+		if err != nil {
+			return "", err
+		}
+
+		for range count {
+			elemHeader, err := reader.ReadString('\n')
+			if err != nil {
+				return sb.String(), err
+			}
+			sb.WriteString(elemHeader)
+
+			if elemHeader[0] == '$' {
+				length, err := strconv.Atoi(strings.TrimSpace(elemHeader[1:]))
+				if err != nil {
+					return sb.String(), err
+				}
+
+				if length != -1 {
+					buf := make([]byte, length+2)
+					_, err = io.ReadFull(reader, buf)
+					if err != nil {
+						return sb.String(), err
+					}
+					sb.Write(buf)
+				}
+			}
+
+		}
+
+	case '$':
+		length, err := strconv.Atoi(strings.TrimSpace(line[1:]))
+		if err != nil {
+			return "", err
+		}
+
+		if length != -1 {
+			buf := make([]byte, length+2)
+			_, err = io.ReadFull(reader, buf)
+			if err != nil {
+				return sb.String(), err
+			}
+			sb.Write(buf)
+		}
+	}
+
+	return sb.String(), nil
 }
