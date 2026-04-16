@@ -7,6 +7,15 @@ import (
 	"io"
 	"net"
 	"os"
+	"strings"
+)
+
+type Direction string
+
+const CRLF = "\r\n"
+const (
+	Left  Direction = "left"
+	Right Direction = "right"
 )
 
 func main() {
@@ -53,7 +62,7 @@ func handleConnection(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 	buf := make([]byte, 1024)
 
-	session := &ClientSession{
+	session := &Session{
 		Connection:      conn,
 		IsAuthenticated: false,
 		UserName:        "default",
@@ -82,10 +91,47 @@ func handleConnection(conn net.Conn) {
 			break
 		}
 
-		text := respParser(session, string(cmd))
+		text := handleCommand(session, string(cmd))
 		_, err = conn.Write([]byte(text))
 		if err != nil {
 			fmt.Println("Write error:", err)
 		}
 	}
+}
+
+func handleCommand(session *Session, input string) string {
+	server := GetServerInstance()
+
+	if input[0] == 42 {
+		args := processRespArray(input)
+
+		command := strings.ToUpper(args[0])
+		if !session.IsAuthenticated && args[0] != "AUTH" {
+			return "-NOAUTH Authentication required\r\n"
+		}
+
+		fnc, exists := server.commandsMap[command]
+		if exists {
+			if command != "PSYNC" && command != "MULTI" {
+				return fnc(command, session, args)
+			}
+			fnc(command, session, args)
+		}
+
+		switch command {
+		case "SET":
+			{
+				response := server.handleSet(args)
+
+				if server.Role == "master" {
+					server.propagate(input)
+				}
+
+				return response
+			}
+
+		}
+	}
+
+	return ""
 }

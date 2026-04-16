@@ -95,8 +95,8 @@ func (server *Server) handleGeodist(arr []string) string {
 		return "$-1\r\n"
 	}
 
-	location1, exists1 := set.dict[locationName1]
-	location2, exists2 := set.dict[locationName2]
+	location1, exists1 := set.ElemDict[locationName1]
+	location2, exists2 := set.ElemDict[locationName2]
 	if !exists1 || !exists2 {
 		return "$-1\r\n"
 	}
@@ -142,7 +142,7 @@ func (server *Server) handleGeosearch(arr []string) string {
 	var locations []string
 
 	rad1 := degPos(latitude, longitude)
-	for _, location := range set.elements {
+	for _, location := range set.ElemSlice {
 		coord1 := decode(uint64(location.Score))
 		rad2 := degPos(coord1.Latitude, coord1.Longitude)
 

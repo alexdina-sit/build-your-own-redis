@@ -73,7 +73,7 @@ func (server *Server) handleZcard(arr []string) string {
 		return ":0\r\n"
 	}
 
-	return fmt.Sprintf(":%d\r\n", len(set.elements))
+	return fmt.Sprintf(":%d\r\n", len(set.ElemSlice))
 }
 
 func (server *Server) handleZrange(arr []string) string {
@@ -97,7 +97,7 @@ func (server *Server) handleZrange(arr []string) string {
 		return "*0\r\n"
 	}
 
-	lenSetElem := len(set.elements)
+	lenSetElem := len(set.ElemSlice)
 	if startIndex < 0 {
 		if -startIndex > lenSetElem {
 			startIndex = 0
@@ -125,7 +125,7 @@ func (server *Server) handleZrange(arr []string) string {
 	var sb strings.Builder
 	addRespArrayHeader(&sb, (stopIndex - startIndex + 1))
 	for i := startIndex; i <= stopIndex; i++ {
-		addRespString(&sb, set.elements[i].Member)
+		addRespString(&sb, set.ElemSlice[i].Member)
 	}
 
 	return sb.String()
@@ -175,7 +175,7 @@ func (server *Server) handleZrem(arr []string) string {
 		}
 	}
 
-	if len(set.elements) == 0 {
+	if len(set.ElemSlice) == 0 {
 		delete(server.zsetsMap, zsetKey)
 	}
 

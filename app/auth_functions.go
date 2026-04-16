@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func (server *Server) handleAcl(session *ClientSession, arr []string) string {
+func (server *Server) handleAcl(session *Session, arr []string) string {
 	if strings.ToUpper(arr[1]) == "WHOAMI" {
 		name := session.UserName
 		return fmt.Sprintf("$%d\r\n%s\r\n", len(name), name)
@@ -71,7 +71,7 @@ func (server *Server) handleAcl(session *ClientSession, arr []string) string {
 	return ""
 }
 
-func (server *Server) handleAuth(session *ClientSession, arr []string) string {
+func (server *Server) handleAuth(session *Session, arr []string) string {
 	if len(arr) < 3 {
 		return "-Missing parameters. Try AUTH <username> <password>.\r\n"
 	}

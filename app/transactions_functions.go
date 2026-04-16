@@ -32,7 +32,7 @@ func (server *Server) handleIncr(arr []string) string {
 	return fmt.Sprintf(":%d\r\n", value)
 }
 
-func (server *Server) handleMulti(session *ClientSession) {
+func (server *Server) handleMulti(session *Session) {
 	reader := session.reader
 	buf := session.buf
 	conn := session.Connection
@@ -68,7 +68,7 @@ func (server *Server) handleMulti(session *ClientSession) {
 
 			returnStr := fmt.Sprintf("*%d\r\n", len(session.commandsQueue))
 			for _, command := range session.commandsQueue {
-				returnStr += respParser(session, command)
+				returnStr += handleCommand(session, command)
 			}
 
 			_, err = conn.Write([]byte(returnStr))

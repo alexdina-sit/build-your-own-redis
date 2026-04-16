@@ -74,7 +74,7 @@ func handshake(masterHost string, masterPort string) {
 	buf := make([]byte, rdbLen)
 	io.ReadFull(reader, buf)
 
-	session := &ClientSession{
+	session := &Session{
 		Connection:      conn,
 		IsReplica:       true,
 		IsAuthenticated: true,
@@ -89,7 +89,7 @@ func handshake(masterHost string, masterPort string) {
 			break
 		}
 
-		response := respParser(session, cmd)
+		response := handleCommand(session, cmd)
 		if strings.Contains(response, "REPLCONF") {
 			conn.Write([]byte(response))
 		}
@@ -98,7 +98,7 @@ func handshake(masterHost string, masterPort string) {
 	}
 }
 
-func (server *Server) handlePsync(session *ClientSession) {
+func (server *Server) handlePsync(session *Session) string {
 	emptyRdbHex := "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0dfb8ea"
 	rdbBytes, _ := hex.DecodeString(emptyRdbHex)
 
@@ -113,9 +113,11 @@ func (server *Server) handlePsync(session *ClientSession) {
 	server.mu.Lock()
 	server.replicas = append(server.replicas, session)
 	server.mu.Unlock()
+
+	return ""
 }
 
-func (server *Server) handleReplconf(session *ClientSession, arr []string) string {
+func (server *Server) handleReplconf(session *Session, arr []string) string {
 	if len(arr) < 1 {
 		return "-ERR Invalid arguments"
 	}
@@ -140,14 +142,14 @@ func (server *Server) handleReplconf(session *ClientSession, arr []string) strin
 	return "+OK\r\n"
 }
 
-func (server *Server) propagate(cmd string) {
+func (server *Server) propagate(input string) {
 	server.mu.Lock()
 	defer server.mu.Unlock()
 
-	server.MasterReplOffset += len([]byte(cmd))
+	server.MasterReplOffset += len([]byte(input))
 
 	for _, replica := range server.replicas {
-		_, err := replica.Connection.Write([]byte(cmd))
+		_, err := replica.Connection.Write([]byte(input))
 		if err != nil {
 			fmt.Println(err.Error())
 		}
