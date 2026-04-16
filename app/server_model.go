@@ -13,6 +13,7 @@ type Server struct {
 	MasterReplId     string
 	MasterReplOffset int
 	mu               sync.RWMutex
+	rdb              *Rdb
 
 	replicas []*Session
 
@@ -21,7 +22,8 @@ type Server struct {
 	listsMap    map[string][]string
 	zsetsMap    map[string]*SortedSet
 	streamsMap  map[string]*Stream
-	commandsMap map[string]func(cmd string, session *Session, args []string) string
+	commandsMap map[string]func(input string, session *Session, args []string) string
+	channels    map[string][]*Session
 }
 
 var (
@@ -36,12 +38,14 @@ func GetServerInstance() *Server {
 				Role:             "master",
 				MasterReplId:     "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
 				MasterReplOffset: 0,
+				rdb:              &Rdb{},
 				itemsMap:         make(map[string]*Item),
 				listsMap:         make(map[string][]string),
 				usersMap:         make(map[string]*User),
 				zsetsMap:         make(map[string]*SortedSet),
 				streamsMap:       make(map[string]*Stream),
-				commandsMap:      make(map[string]func(cmd string, session *Session, args []string) string),
+				commandsMap:      make(map[string]func(input string, session *Session, args []string) string),
+				channels:         make(map[string][]*Session),
 			}
 
 			serverInstance.initCommands()
@@ -49,7 +53,10 @@ func GetServerInstance() *Server {
 	return serverInstance
 }
 
-func (server *Server) handlePing() string {
+func (server *Server) handlePing(session *Session) string {
+	if len(session.SubscribedChannels) > 0 {
+		return "*2\r\n$4\r\npong\r\n$0\r\n\r\n"
+	}
 	return "+PONG\r\n"
 }
 

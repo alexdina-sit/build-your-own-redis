@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"slices"
 	"strings"
 )
 
@@ -18,13 +19,23 @@ const (
 	Right Direction = "right"
 )
 
+var allowedCommandsSubscribed = []string{"SUBSCRIBE", "UNSUBSCRIBE", "PSUBSCRIBE", "PUNSUBSCRIBE", "PING", "QUIT"}
+
 func main() {
 	server := GetServerInstance()
 	server.usersMap["default"] = &User{Flags: []string{"nopass"}}
 
 	portFlag := flag.String("port", "6379", "The port to listen on")
 	replicaFlag := flag.String("replicaof", "", "Master and slave ports")
+	dirFlag := flag.String("dir", "", "RDB dir")
+	dbfilenameFlag := flag.String("dbfilename", "", "RDB dbfilename")
 	flag.Parse()
+
+	if *dirFlag != "" && *dbfilenameFlag != "" {
+		server.rdb.Dir = *dirFlag
+		server.rdb.DbFileName = *dbfilenameFlag
+		server.loadRdb()
+	}
 
 	if *replicaFlag != "" {
 		server.Role = "slave"
@@ -59,16 +70,8 @@ func handleConnection(conn net.Conn) {
 	defer conn.Close()
 
 	server := GetServerInstance()
-	reader := bufio.NewReader(conn)
-	buf := make([]byte, 1024)
-
-	session := &Session{
-		Connection:      conn,
-		IsAuthenticated: false,
-		UserName:        "default",
-		reader:          *reader,
-		buf:             buf,
-	}
+	reader, buf := bufio.NewReader(conn), make([]byte, 1024)
+	session := NewSession(conn, reader, buf)
 
 	server.mu.RLock()
 	defaultUser, exists := server.usersMap["default"]
@@ -110,6 +113,10 @@ func handleCommand(session *Session, input string) string {
 			return "-NOAUTH Authentication required\r\n"
 		}
 
+		if len(session.SubscribedChannels) > 0 && !slices.Contains(allowedCommandsSubscribed, command) {
+			return fmt.Sprintf("-ERR Can't execute '%s' while subscribed to a channel\r\n", command)
+		}
+
 		fnc, exists := server.commandsMap[command]
 		if exists {
 			if command != "PSYNC" && command != "MULTI" {
@@ -130,6 +137,17 @@ func handleCommand(session *Session, input string) string {
 				return response
 			}
 
+		case "KEYS":
+			{
+				var sb strings.Builder
+				keys := len(server.itemsMap)
+				addRespArrayHeader(&sb, keys)
+				for key := range server.itemsMap {
+					addRespString(&sb, key)
+				}
+
+				return sb.String()
+			}
 		}
 	}
 
