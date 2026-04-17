@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -12,12 +15,12 @@ type Server struct {
 	Role             string
 	MasterReplId     string
 	MasterReplOffset int
-	mu               sync.RWMutex
-	rdb              *Rdb
-	aof              *AOF
+	Config           *Config
+	aof              *os.File
 
-	replicas []*Session
+	mu sync.RWMutex
 
+	replicas    []*Session
 	itemsMap    map[string]*Item
 	usersMap    map[string]*User
 	listsMap    map[string][]string
@@ -40,7 +43,6 @@ func GetServerInstance() *Server {
 				Role:             "master",
 				MasterReplId:     "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
 				MasterReplOffset: 0,
-				rdb:              &Rdb{},
 				itemsMap:         make(map[string]*Item),
 				listsMap:         make(map[string][]string),
 				usersMap:         make(map[string]*User),
@@ -131,4 +133,54 @@ func (server *Server) handleGet(arr []string) string {
 	}
 
 	return fmt.Sprintf("$%d\r\n%s\r\n", len(item.Value), item.Value)
+}
+
+func (server *Server) LoadAOF() {
+	directoryPath := filepath.Join(server.Config.Dir, server.Config.AppendDirname)
+	manifestPath := filepath.Join(directoryPath, server.Config.AppendFilename+".manifest")
+	aofPath := filepath.Join(directoryPath, server.Config.AppendFilename+".1.incr.aof")
+
+	manifestFile, error := os.Open(manifestPath)
+	fmt.Println("Manifest path:", manifestPath)
+	if os.IsNotExist(error) {
+		os.MkdirAll(directoryPath, os.ModePerm)
+
+		aof, _ := createFile(aofPath)
+		aof.Close()
+
+		manifestFile, _ = createFile(manifestPath)
+		manifestText := fmt.Sprintf("file %s seq 1 type i", server.Config.AppendFilename+".1.incr.aof")
+		manifestFile.Write([]byte(manifestText))
+		manifestFile.Close()
+		return
+	}
+
+	readManifestFile(manifestFile)
+	manifestFile.Close()
+
+}
+
+func createFile(filePath string) (*os.File, error) {
+	file, err := os.Create(filePath)
+	if err != nil {
+		fmt.Println("Failed to create your file. Error: ", err)
+		os.Exit(1)
+	}
+
+	return file, nil
+}
+
+func readManifestFile(file *os.File) (string, int, string) {
+	fmt.Println("sunt in readmanifest")
+	reader := bufio.NewReader(file)
+	data, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Println("Failed to read the manifest file")
+		os.Exit(1)
+	}
+
+	parts := strings.Split(data, ".")
+
+	fmt.Println(parts)
+	return "", 0, ""
 }

@@ -13,39 +13,48 @@ import (
 
 type Direction string
 
-const CRLF = "\r\n"
 const (
+	CRLF            = "\r\n"
 	Left  Direction = "left"
 	Right Direction = "right"
 )
 
-var allowedCommandsSubscribed = []string{"SUBSCRIBE", "UNSUBSCRIBE", "PSUBSCRIBE", "PUNSUBSCRIBE", "PING", "QUIT"}
+var (
+	allowedCommandsSubscribed = []string{"SUBSCRIBE", "UNSUBSCRIBE", "PSUBSCRIBE", "PUNSUBSCRIBE", "PING", "QUIT"}
+
+	portFlag    = flag.String("port", "6379", "The port to listen on")
+	replicaFlag = flag.String("replicaof", "", "Master and slave ports")
+
+	dirFlag            = flag.String("dir", "", "File dir")
+	dbfilenameFlag     = flag.String("dbfilename", "", "RDB dbfilename")
+	appendonlyFlag     = flag.String("appendonly", "", "Appendonly flag")
+	appenddirnameFlag  = flag.String("appenddirname", "", "Appenddirname flag")
+	appendfilenameFlag = flag.String("appendfilename", "", "Appendfilename flag")
+	appendfsyncFlag    = flag.String("appendfsync", "", "Appendfsync flag")
+)
 
 func main() {
+	flag.Parse()
+
 	server := GetServerInstance()
 	server.usersMap["default"] = &User{Flags: []string{"nopass"}}
 
-	portFlag := flag.String("port", "6379", "The port to listen on")
-	replicaFlag := flag.String("replicaof", "", "Master and slave ports")
+	server.Config = NewConfig(
+		dirFlag,
+		dbfilenameFlag,
+		appendonlyFlag,
+		appenddirnameFlag,
+		appendfilenameFlag,
+		appendfsyncFlag,
+	)
 
-	dirFlag := flag.String("dir", "", "File dir")
-	dbfilenameFlag := flag.String("dbfilename", "", "RDB dbfilename")
-	appendonlyFlag := flag.String("appendonly", "", "Appendonly flag")
-	appenddirnameFlag := flag.String("appenddirname", "", "Appenddirname flag")
-	appendfilenameFlag := flag.String("appendfilename", "", "Appendfilename flag")
-	appendfsyncFlag := flag.String("appendfsync", "", "Appendfsync flag")
+	server.LoadRdb()
 
-	fmt.Println(*appendonlyFlag, *appenddirnameFlag, *appendfilenameFlag, *appendfsyncFlag)
-
-	flag.Parse()
-
-	if *dirFlag != "" && *dbfilenameFlag != "" {
-		server.rdb.Dir = *dirFlag
-		server.rdb.DbFileName = *dbfilenameFlag
-		server.loadRdb()
+	if server.Config.AppendOnly == "yes" {
+		server.LoadAOF()
 	}
 
-	if *replicaFlag != "" {
+	if replicaFlag != nil && *replicaFlag != "" {
 		server.Role = "slave"
 
 		masterHost, masterPort, err := getMasterAddress(*replicaFlag)
