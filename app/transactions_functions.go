@@ -54,28 +54,61 @@ func (server *Server) handleMulti(session *Session) {
 		}
 
 		text := string(buf[:n])
+		if strings.Contains(text, "WATCH") {
+			_, err = conn.Write([]byte("-ERR WATCH inside MULTI is not allowed\r\n"))
+			return
+		}
+
 		if strings.Contains(text, "DISCARD") {
 			_, err = conn.Write([]byte("+OK\r\n"))
 			session.commandsQueue = make([]string, 0)
+			session.WatchedKeys = make(map[string]int)
 			return
 		}
 
 		if strings.Contains(text, "EXEC") {
-			if len(session.commandsQueue) == 0 {
-				_, err = conn.Write([]byte("*0\r\n"))
-				return
-			}
-
-			returnStr := fmt.Sprintf("*%d\r\n", len(session.commandsQueue))
-			for _, command := range session.commandsQueue {
-				returnStr += handleCommand(session, command)
-			}
-
-			_, err = conn.Write([]byte(returnStr))
+			server.handleExec(session)
 			return
 		}
 
 		session.commandsQueue = append(session.commandsQueue, text)
 		_, err = conn.Write([]byte("+QUEUED\r\n"))
 	}
+}
+
+func (server *Server) handleExec(session *Session) {
+	var sb strings.Builder
+
+	if len(session.commandsQueue) == 0 {
+		session.Connection.Write([]byte("*0\r\n"))
+		return
+	}
+
+	if !changeTracker(server, session) {
+		session.Connection.Write([]byte("*-1\r\n"))
+		session.WatchedKeys = make(map[string]int)
+		session.commandsQueue = make([]string, 0)
+		return
+	}
+
+	addRespArrayHeader(&sb, len(session.commandsQueue))
+	for _, command := range session.commandsQueue {
+		sb.WriteString(handleCommand(session, command))
+	}
+
+	session.Connection.Write([]byte(sb.String()))
+	session.WatchedKeys = make(map[string]int)
+	session.commandsQueue = make([]string, 0)
+}
+
+func changeTracker(server *Server, session *Session) bool {
+	for key, sessionValue := range session.WatchedKeys {
+		if serverValue, exists := server.ServerKeys[key]; exists {
+			if serverValue != sessionValue {
+				return false
+			}
+		}
+	}
+
+	return true
 }

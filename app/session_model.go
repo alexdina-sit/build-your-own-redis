@@ -15,6 +15,7 @@ type Session struct {
 	IsReplica          bool
 	ReplOffset         int
 	SubscribedChannels map[string]bool
+	WatchedKeys        map[string]int
 }
 
 func NewSession(conn net.Conn, reader *bufio.Reader, buf []byte) *Session {
@@ -25,5 +26,6 @@ func NewSession(conn net.Conn, reader *bufio.Reader, buf []byte) *Session {
 		reader:             *reader,
 		buf:                buf,
 		SubscribedChannels: make(map[string]bool),
+		WatchedKeys:        make(map[string]int),
 	}
 }

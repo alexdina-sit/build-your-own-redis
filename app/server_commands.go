@@ -22,7 +22,8 @@ func (server *Server) initCommands() {
 		"ZSCORE":    func(_ string, _ *Session, args []string) string { return server.handleZscore(args) },
 		"WAIT":      func(_ string, _ *Session, args []string) string { return server.handleWait(args) },
 
-		"PING": func(_ string, session *Session, _ []string) string { return server.handlePing(session) },
+		"PING":    func(_ string, session *Session, _ []string) string { return server.handlePing(session) },
+		"UNWATCH": func(_ string, session *Session, _ []string) string { return server.HandleUnwatch(session) },
 
 		"ZREM":   func(input string, _ *Session, args []string) string { return server.handleZrem(args) },
 		"RPUSH":  func(input string, _ *Session, args []string) string { return server.handlePush(args, Right) },
@@ -35,10 +36,12 @@ func (server *Server) initCommands() {
 		"LPOP":   func(input string, _ *Session, args []string) string { return server.handleLpop(args) },
 		"BLPOP":  func(input string, _ *Session, args []string) string { return server.handleBlpop(args) },
 
-		"ACL":       func(_ string, session *Session, args []string) string { return server.handleAcl(session, args) },
-		"AUTH":      func(_ string, session *Session, args []string) string { return server.handleAuth(session, args) },
-		"REPLCONF":  func(_ string, session *Session, args []string) string { return server.handleReplconf(session, args) },
-		"SUBSCRIBE": func(_ string, session *Session, args []string) string { return server.handleSubscribe(session, args) },
+		"ACL":         func(_ string, session *Session, args []string) string { return server.handleAcl(session, args) },
+		"AUTH":        func(_ string, session *Session, args []string) string { return server.handleAuth(session, args) },
+		"REPLCONF":    func(_ string, session *Session, args []string) string { return server.handleReplconf(session, args) },
+		"SUBSCRIBE":   func(_ string, session *Session, args []string) string { return server.HandleSubscribe(session, args) },
+		"PUBLISH":     func(_ string, session *Session, args []string) string { return server.HandlePublish(session, args) },
+		"UNSUBSCRIBE": func(_ string, session *Session, args []string) string { return server.HandleUnsubscribe(session, args) },
 
 		"MULTI": func(_ string, session *Session, _ []string) string {
 			server.handleMulti(session)
@@ -49,5 +52,7 @@ func (server *Server) initCommands() {
 			server.handlePsync(session)
 			return ""
 		},
+
+		"WATCH": func(input string, session *Session, args []string) string { return server.HandleWatch(session, args) },
 	}
 }

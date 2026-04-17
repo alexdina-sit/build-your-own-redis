@@ -142,20 +142,6 @@ func (server *Server) handleReplconf(session *Session, arr []string) string {
 	return "+OK\r\n"
 }
 
-func (server *Server) propagate(input string) {
-	server.mu.Lock()
-	defer server.mu.Unlock()
-
-	server.MasterReplOffset += len([]byte(input))
-
-	for _, replica := range server.replicas {
-		_, err := replica.Connection.Write([]byte(input))
-		if err != nil {
-			fmt.Println(err.Error())
-		}
-	}
-}
-
 func (server *Server) handleWait(arr []string) string {
 	if len(arr) < 3 {
 		return "-ERR Missing arguments. Please try: WAIT <num> <timeout>\r\n"

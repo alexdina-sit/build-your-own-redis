@@ -27,8 +27,16 @@ func main() {
 
 	portFlag := flag.String("port", "6379", "The port to listen on")
 	replicaFlag := flag.String("replicaof", "", "Master and slave ports")
-	dirFlag := flag.String("dir", "", "RDB dir")
+
+	dirFlag := flag.String("dir", "", "File dir")
 	dbfilenameFlag := flag.String("dbfilename", "", "RDB dbfilename")
+	appendonlyFlag := flag.String("appendonly", "", "Appendonly flag")
+	appenddirnameFlag := flag.String("appenddirname", "", "Appenddirname flag")
+	appendfilenameFlag := flag.String("appendfilename", "", "Appendfilename flag")
+	appendfsyncFlag := flag.String("appendfsync", "", "Appendfsync flag")
+
+	fmt.Println(*appendonlyFlag, *appenddirnameFlag, *appendfilenameFlag, *appendfsyncFlag)
+
 	flag.Parse()
 
 	if *dirFlag != "" && *dbfilenameFlag != "" {
@@ -131,7 +139,11 @@ func handleCommand(session *Session, input string) string {
 				response := server.handleSet(args)
 
 				if server.Role == "master" {
-					server.propagate(input)
+					server.mu.Lock()
+					defer server.mu.Unlock()
+
+					server.MasterReplOffset += len([]byte(input))
+					propagate(server.replicas, input)
 				}
 
 				return response

@@ -14,6 +14,7 @@ type Server struct {
 	MasterReplOffset int
 	mu               sync.RWMutex
 	rdb              *Rdb
+	aof              *AOF
 
 	replicas []*Session
 
@@ -24,6 +25,7 @@ type Server struct {
 	streamsMap  map[string]*Stream
 	commandsMap map[string]func(input string, session *Session, args []string) string
 	channels    map[string][]*Session
+	ServerKeys  map[string]int
 }
 
 var (
@@ -46,6 +48,7 @@ func GetServerInstance() *Server {
 				streamsMap:       make(map[string]*Stream),
 				commandsMap:      make(map[string]func(input string, session *Session, args []string) string),
 				channels:         make(map[string][]*Session),
+				ServerKeys:       make(map[string]int),
 			}
 
 			serverInstance.initCommands()
@@ -76,17 +79,17 @@ func (server *Server) handleEcho(args []string) string {
 	return fmt.Sprintf("$%d\r\n%s\r\n", len(args[1]), args[1])
 }
 
-func (server *Server) handleSet(arr []string) string {
+func (server *Server) handleSet(args []string) string {
 	var expireType string
 	var expireTime int
 
-	if len(arr) < 3 {
+	if len(args) < 3 {
 		return "-ERR Missing arguments. Your input should be: SET <key> <value>\r\n"
 	}
 
-	if len(arr) > 4 {
-		expireType = strings.ToUpper(arr[3])
-		intValue, err := strconv.Atoi(arr[4])
+	if len(args) > 4 {
+		expireType = strings.ToUpper(args[3])
+		intValue, err := strconv.Atoi(args[4])
 		if err != nil {
 			return "-ERR Error while converting your expire value\r\n"
 		}
@@ -97,13 +100,14 @@ func (server *Server) handleSet(arr []string) string {
 	server.mu.Lock()
 	defer server.mu.Unlock()
 
-	server.itemsMap[arr[1]] = &Item{
-		Value:      arr[2],
+	server.itemsMap[args[1]] = &Item{
+		Value:      args[2],
 		ExpireType: expireType,
 		ExpireTime: expireTime,
 		CreateDate: time.Now(),
 	}
 
+	server.ServerKeys[args[1]]++
 	return "+OK\r\n"
 }
 

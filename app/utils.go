@@ -98,3 +98,14 @@ func readRespCommand(reader *bufio.Reader) (string, error) {
 
 	return sb.String(), nil
 }
+
+func propagate(sessions []*Session, data string) error {
+	for _, session := range sessions {
+		_, err := session.Connection.Write([]byte(data))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
