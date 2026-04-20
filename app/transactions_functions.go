@@ -112,3 +112,11 @@ func changeTracker(server *Server, session *Session) bool {
 
 	return true
 }
+
+func (server *Server) execWithoutMulti() string {
+	return "-ERR EXEC without MULTI\r\n"
+}
+
+func (server *Server) discardWithoutMulti() string {
+	return "-ERR DISCARD without MULTI\r\n"
+}

@@ -6,6 +6,19 @@ import (
 	"time"
 )
 
+type StreamEntry struct {
+	ID         string
+	Values     []string
+	timestamp  int64
+	sequenceNo int64
+}
+
+type Stream struct {
+	Entries        []*StreamEntry
+	lastTimestamp  int64
+	lastSequenceNo int64
+}
+
 func (server *Server) xreadLastCase(ids, keys []string) []string {
 	server.mu.RLock()
 	defer server.mu.RUnlock()
