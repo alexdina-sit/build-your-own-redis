@@ -13,24 +13,24 @@ type User struct {
 	Authenticated bool
 }
 
-func (server *Server) handleAcl(session *Session, args []string) string {
+func (server *Server) HandleAcl(session *Session, args []string) string {
 	if strings.ToUpper(args[1]) == "WHOAMI" {
 		name := session.UserName
 		return fmt.Sprintf("$%d\r\n%s\r\n", len(name), name)
 	}
 
 	if strings.ToUpper(args[1]) == "GETUSER" {
-		return handleGetUser(server, args)
+		return getUserScenario(server, args)
 	}
 
 	if strings.ToUpper(args[1]) == "SETUSER" {
-		return handleSetUser(server, args)
+		return setUserScenario(server, args)
 	}
 
 	return ""
 }
 
-func handleGetUser(server *Server, args []string) string {
+func getUserScenario(server *Server, args []string) string {
 	if len(args) < 3 {
 		return "-You must provide the user name. Syntax: ACL GETUSER <username>.\r\n"
 	}
@@ -60,7 +60,7 @@ func handleGetUser(server *Server, args []string) string {
 	return sb.String()
 }
 
-func handleSetUser(server *Server, args []string) string {
+func setUserScenario(server *Server, args []string) string {
 	if len(args) < 3 {
 		return "-You must provide the user name. Syntax: ACL SETUSER <username>.\r\n"
 	}
@@ -86,7 +86,7 @@ func handleSetUser(server *Server, args []string) string {
 	return "+OK\r\n"
 }
 
-func (server *Server) handleAuth(session *Session, arr []string) string {
+func (server *Server) HandleAuth(session *Session, arr []string) string {
 	if len(arr) < 3 {
 		return "-Missing arguments. Please try ry AUTH <username> <password>.\r\n"
 	}

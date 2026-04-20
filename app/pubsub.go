@@ -7,7 +7,7 @@ import (
 
 func (server *Server) HandleSubscribe(session *Session, args []string) string {
 	if len(args) < 2 {
-		return "-ERR Missing arguments. Please try: SUBSCRIBE <channel_name>"
+		return "-ERR Missing arguments. Please try: SUBSCRIBE <channel_name>\r\n"
 	}
 
 	var sb strings.Builder
@@ -32,7 +32,7 @@ func (server *Server) HandleSubscribe(session *Session, args []string) string {
 
 func (server *Server) HandleUnsubscribe(session *Session, args []string) string {
 	if len(args) < 2 {
-		return "-ERR Missing arguments. Please try: SUBSCRIBE <channel_name>"
+		return "-ERR Missing arguments. Please try: SUBSCRIBE <channel_name>\r\n"
 	}
 
 	var sb strings.Builder

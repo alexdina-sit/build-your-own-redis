@@ -1,14 +1,10 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
-	"io"
 	"net"
 	"os"
-	"slices"
-	"strings"
 )
 
 type Direction string
@@ -63,7 +59,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		go handshake(masterHost, masterPort)
+		go server.Handshake(masterHost, masterPort)
 	}
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", *portFlag))
@@ -79,98 +75,6 @@ func main() {
 			fmt.Println("Error accepting connection: ", err)
 			continue
 		}
-		go handleConnection(conn)
+		go server.HandleConnection(conn)
 	}
-}
-
-func handleConnection(conn net.Conn) {
-	defer conn.Close()
-
-	server := GetServerInstance()
-	reader, buf := bufio.NewReader(conn), make([]byte, 1024)
-	session := NewSession(conn, reader, buf)
-
-	server.mu.RLock()
-	defaultUser, exists := server.usersMap["default"]
-	if exists {
-		for _, flag := range defaultUser.Flags {
-			if flag == "nopass" {
-				session.IsAuthenticated = true
-			}
-		}
-	}
-	server.mu.RUnlock()
-
-	for {
-		cmd, err := readRespCommand(reader)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			fmt.Println("Read error:", err)
-			break
-		}
-
-		text := handleCommand(session, string(cmd))
-		_, err = conn.Write([]byte(text))
-		if err != nil {
-			fmt.Println("Write error:", err)
-		}
-	}
-}
-
-func handleCommand(session *Session, input string) string {
-	server := GetServerInstance()
-
-	if input[0] == 42 {
-		args := processRespArray(input)
-
-		command := strings.ToUpper(args[0])
-		if !session.IsAuthenticated && args[0] != "AUTH" {
-			return "-NOAUTH Authentication required\r\n"
-		}
-
-		if len(session.SubscribedChannels) > 0 && !slices.Contains(allowedCommandsSubscribed, command) {
-			return fmt.Sprintf("-ERR Can't execute '%s' while subscribed to a channel\r\n", command)
-		}
-
-		fnc, exists := server.commandsMap[command]
-		if exists {
-			if command != "PSYNC" && command != "MULTI" {
-				return fnc(command, session, args)
-			}
-			fnc(command, session, args)
-		}
-
-		switch command {
-		case "SET":
-			{
-				response := server.handleSet(args)
-
-				if server.Role == "master" {
-					server.mu.Lock()
-					defer server.mu.Unlock()
-
-					server.MasterReplOffset += len([]byte(input))
-					propagate(server.replicas, input)
-				}
-
-				return response
-			}
-
-		case "KEYS":
-			{
-				var sb strings.Builder
-				keys := len(server.itemsMap)
-				addRespArrayHeader(&sb, keys)
-				for key := range server.itemsMap {
-					addRespString(&sb, key)
-				}
-
-				return sb.String()
-			}
-		}
-	}
-
-	return ""
 }

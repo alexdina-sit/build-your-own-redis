@@ -99,9 +99,9 @@ func (server *Server) readKeyValueItem(reader *bufio.Reader, hasExpireTime bool,
 		}
 
 		difference := int64(expireTimeMs) - timeNowMs
-		server.handleSet([]string{"SET", string(key), string(value), "PX", fmt.Sprint(difference)})
+		server.HandleSet([]string{"SET", string(key), string(value), "PX", fmt.Sprint(difference)})
 	} else {
-		server.handleSet([]string{"SET", string(key), string(value)})
+		server.HandleSet([]string{"SET", string(key), string(value)})
 	}
 	return ""
 }
@@ -143,7 +143,7 @@ func (server *Server) configGet(args []string) string {
 	return sb.String()
 }
 
-func (server *Server) handleConfig(args []string) string {
+func (server *Server) HandleConfig(args []string) string {
 	if len(args) < 2 {
 		return "-ERR Missing arguments.\r\n"
 	}
@@ -155,28 +155,13 @@ func (server *Server) handleConfig(args []string) string {
 	return ""
 }
 
-func readRdb(data []byte) map[string]string {
-	result := make(map[string]string)
-	i := 9
-
-	for i < len(data) {
-		if data[i] == 0xFF {
-			break
-		}
-
-		if data[i] == 0xFB {
-			i += 2
-			continue
-		}
-
-		if data[i] != 0x00 {
-			i++
-			continue
-		}
-
-		keyLen := int(data[i])
-		fmt.Println(keyLen)
+func (server *Server) HandleKeys() string {
+	var sb strings.Builder
+	keys := len(server.itemsMap)
+	addRespArrayHeader(&sb, keys)
+	for key := range server.itemsMap {
+		addRespString(&sb, key)
 	}
 
-	return result
+	return sb.String()
 }

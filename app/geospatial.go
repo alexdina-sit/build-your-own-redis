@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func (server *Server) handleGeoadd(arr []string) string {
+func (server *Server) HandleGeoadd(arr []string) string {
 	if len(arr) < 5 {
 		return "-ERR Invalid input. Please try: GEOADD <set_key> <latitude> <longitude> <location>\r\n"
 	}
@@ -44,7 +44,7 @@ func (server *Server) handleGeoadd(arr []string) string {
 	return ":1\r\n"
 }
 
-func (server *Server) handleGeopos(arr []string) string {
+func (server *Server) HandleGeopos(arr []string) string {
 	if len(arr) < 3 {
 		return "-ERR Invalid input. Please try: GEOPOS <zset_key> <location>"
 	}
@@ -81,7 +81,7 @@ func (server *Server) handleGeopos(arr []string) string {
 	return sb.String()
 }
 
-func (server *Server) handleGeodist(arr []string) string {
+func (server *Server) HandleGeodist(arr []string) string {
 	if len(arr) < 4 {
 		return "-ERR Invalid syntax. Please try: GEOADD <zset_key> <location_1> <location_2>\r\n"
 	}
@@ -113,7 +113,7 @@ func (server *Server) handleGeodist(arr []string) string {
 	return sb.String()
 }
 
-func (server *Server) handleGeosearch(arr []string) string {
+func (server *Server) HandleGeosearch(arr []string) string {
 	if len(arr) < 8 {
 		return "-ERR Invalid input. Please try: GEOSEARCH <zset_key> FROMLONLAT <longitude> <latitude> BYRADIUS 100 m"
 	}

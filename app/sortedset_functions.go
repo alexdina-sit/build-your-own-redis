@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func (server *Server) handleZadd(arr []string) string {
+func (server *Server) HandleZadd(arr []string) string {
 	if len(arr) < 4 || (len(arr)-2)%2 != 0 {
 		return "-ERR syntax error. Please try: ZADD <zset_key> <score> <member>\r\n"
 	}
@@ -36,7 +36,7 @@ func (server *Server) handleZadd(arr []string) string {
 	return fmt.Sprintf(":%d\r\n", addedCount)
 }
 
-func (server *Server) handleZrank(arr []string) string {
+func (server *Server) HandleZrank(arr []string) string {
 	if len(arr) < 3 {
 		return "-ERR syntax error. Please try: ZRANK <zset_key> <zset_member>\r\n"
 	}
@@ -59,7 +59,7 @@ func (server *Server) handleZrank(arr []string) string {
 	return fmt.Sprintf(":%d\r\n", memberRank)
 }
 
-func (server *Server) handleZcard(arr []string) string {
+func (server *Server) HandleZcard(arr []string) string {
 	if len(arr) < 2 {
 		return "-ERR Invalid syntax. Please try: ZCARD <zset_key>"
 	}
@@ -76,7 +76,7 @@ func (server *Server) handleZcard(arr []string) string {
 	return fmt.Sprintf(":%d\r\n", len(set.ElemSlice))
 }
 
-func (server *Server) handleZrange(arr []string) string {
+func (server *Server) HandleZrange(arr []string) string {
 	if len(arr) < 4 {
 		return "-ERR Syntax error. Please try: ZRANG <zset_key> <start> <stop>\r\n"
 	}
@@ -131,7 +131,7 @@ func (server *Server) handleZrange(arr []string) string {
 	return sb.String()
 }
 
-func (server *Server) handleZscore(arr []string) string {
+func (server *Server) HandleZscore(arr []string) string {
 	if len(arr) < 3 {
 		return "-ERR Invalid syntax. Please try: ZSCORE <zset_key> <zset_member>"
 	}
@@ -154,7 +154,7 @@ func (server *Server) handleZscore(arr []string) string {
 	return fmt.Sprintf("$%d\r\n%s\r\n", len(scoreStr), scoreStr)
 }
 
-func (server *Server) handleZrem(arr []string) string {
+func (server *Server) HandleZrem(arr []string) string {
 	if len(arr) < 3 {
 		return "-ERR Invalid syntax. Please try: ZREM <zset_key> <zset_member1>..\r\n"
 	}

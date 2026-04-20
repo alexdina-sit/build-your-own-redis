@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func (server *Server) handleIncr(arr []string) string {
+func (server *Server) HandleIncr(arr []string) string {
 	if len(arr) < 2 {
 		return "-Missing arguments. Try INCR <key>"
 	}
@@ -32,7 +32,7 @@ func (server *Server) handleIncr(arr []string) string {
 	return fmt.Sprintf(":%d\r\n", value)
 }
 
-func (server *Server) handleMulti(session *Session) {
+func (server *Server) HandleMulti(session *Session) {
 	reader := session.reader
 	buf := session.buf
 	conn := session.Connection
@@ -67,7 +67,7 @@ func (server *Server) handleMulti(session *Session) {
 		}
 
 		if strings.Contains(text, "EXEC") {
-			server.handleExec(session)
+			server.HandleExec(session)
 			return
 		}
 
@@ -76,7 +76,7 @@ func (server *Server) handleMulti(session *Session) {
 	}
 }
 
-func (server *Server) handleExec(session *Session) {
+func (server *Server) HandleExec(session *Session) {
 	var sb strings.Builder
 
 	if len(session.commandsQueue) == 0 {
@@ -93,7 +93,7 @@ func (server *Server) handleExec(session *Session) {
 
 	addRespArrayHeader(&sb, len(session.commandsQueue))
 	for _, command := range session.commandsQueue {
-		sb.WriteString(handleCommand(session, command))
+		sb.WriteString(server.HandleCommand(session, command))
 	}
 
 	session.Connection.Write([]byte(sb.String()))
@@ -113,10 +113,10 @@ func changeTracker(server *Server, session *Session) bool {
 	return true
 }
 
-func (server *Server) execWithoutMulti() string {
+func (server *Server) ExecWithoutMulti() string {
 	return "-ERR EXEC without MULTI\r\n"
 }
 
-func (server *Server) discardWithoutMulti() string {
+func (server *Server) DiscardWithoutMulti() string {
 	return "-ERR DISCARD without MULTI\r\n"
 }

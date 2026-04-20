@@ -19,7 +19,7 @@ type Stream struct {
 	lastSequenceNo int64
 }
 
-func (server *Server) xreadLastCase(ids, keys []string) []string {
+func (server *Server) XreadLastCase(ids, keys []string) []string {
 	server.mu.RLock()
 	defer server.mu.RUnlock()
 
@@ -40,7 +40,7 @@ func (server *Server) xreadLastCase(ids, keys []string) []string {
 	return newIds
 }
 
-func (server *Server) handleType(arr []string) string {
+func (server *Server) HandleType(arr []string) string {
 	server.mu.RLock()
 	defer server.mu.RUnlock()
 
@@ -55,7 +55,7 @@ func (server *Server) handleType(arr []string) string {
 	return "+none\r\n"
 }
 
-func (server *Server) handleXadd(arr []string) string {
+func (server *Server) HandleXadd(arr []string) string {
 	if len(arr) < 5 || (len(arr)-3)%2 != 0 {
 		return "-Missing arguments. Try: XADD <stream_key> <id> <key> <value>...\r\n"
 	}
@@ -105,7 +105,7 @@ func (server *Server) handleXadd(arr []string) string {
 	return fmt.Sprintf("$%d\r\n%s\r\n", len(id), id)
 }
 
-func (server *Server) handleXrange(arr []string) string {
+func (server *Server) HandleXrange(arr []string) string {
 	if len(arr) < 4 {
 		return "-Missing arguments. Please try: XRANGE <stream_key> <start> <stop>\r\n"
 	}
@@ -147,7 +147,7 @@ func (server *Server) handleXread(arr []string) string {
 
 	numStreams := len(arguments) / 2
 	keys := arguments[:numStreams]
-	ids := server.xreadLastCase(arguments[numStreams:], keys)
+	ids := server.XreadLastCase(arguments[numStreams:], keys)
 
 	now := time.Now()
 	for {

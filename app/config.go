@@ -1,5 +1,7 @@
 package main
 
+import "os"
+
 type Config struct {
 	Dir            string
 	DbFileName     string
@@ -10,8 +12,10 @@ type Config struct {
 }
 
 func NewConfig(dir, dbfilename, appendonly, appenddirname, appendfilename, appendfsync *string) *Config {
+	defaultDir, _ := os.Getwd()
+
 	config := Config{
-		Dir:            DIR,
+		Dir:            defaultDir,
 		DbFileName:     "",
 		AppendOnly:     "no",
 		AppendDirname:  "appendonlydir",

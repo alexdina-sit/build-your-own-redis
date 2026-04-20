@@ -14,22 +14,7 @@ type Item struct {
 	CreateDate time.Time
 }
 
-func (server *Server) handlePing(session *Session) string {
-	if len(session.SubscribedChannels) > 0 {
-		return "*2\r\n$4\r\npong\r\n$0\r\n\r\n"
-	}
-	return "+PONG\r\n"
-}
-
-func (server *Server) handleEcho(args []string) string {
-	if len(args) < 2 {
-		return "-ERR Missing arguments. Please try: ECHO <text>\r\n"
-	}
-
-	return fmt.Sprintf("$%d\r\n%s\r\n", len(args[1]), args[1])
-}
-
-func (server *Server) handleSet(args []string) string {
+func (server *Server) HandleSet(args []string) string {
 	var expireType string
 	var expireTime int
 
@@ -61,7 +46,7 @@ func (server *Server) handleSet(args []string) string {
 	return "+OK\r\n"
 }
 
-func (server *Server) handleGet(arr []string) string {
+func (server *Server) HandleGet(arr []string) string {
 	server.mu.Lock()
 	defer server.mu.Unlock()
 

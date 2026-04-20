@@ -15,19 +15,19 @@ import (
 func getMasterAddress(replicaofArgs string) (string, string, error) {
 	replicaParts := strings.Split(replicaofArgs, " ")
 	if len(replicaParts) < 2 {
-		return "", "", errors.New("-ERR Missing arguments, you should mention both MASTER_HOST and MASTER_PORT")
+		return "", "", errors.New("-ERR Missing arguments, you should mention both MASTER_HOST and MASTER_PORT\r\n")
 	}
 
 	masterHost, masterPort := replicaParts[0], replicaParts[1]
 	_, err := strconv.Atoi(masterPort)
 	if err != nil {
-		return "", "", errors.New("-ERR Failed to convert the MASTER_PORT. Please try again with an integer value")
+		return "", "", errors.New("-ERR Failed to convert the MASTER_PORT. Please try again with an integer value\r\n")
 	}
 
 	return masterHost, masterPort, nil
 }
 
-func (server *Server) handleInfo(arr []string) string {
+func (server *Server) HandleInfo(arr []string) string {
 	var sb strings.Builder
 
 	if len(arr) < 1 {
@@ -43,7 +43,7 @@ func (server *Server) handleInfo(arr []string) string {
 	return ""
 }
 
-func handshake(masterHost string, masterPort string) {
+func (server *Server) Handshake(masterHost string, masterPort string) {
 	masterAddress := net.JoinHostPort(masterHost, masterPort)
 	conn, err := net.Dial("tcp", masterAddress)
 	if err != nil {
@@ -89,7 +89,7 @@ func handshake(masterHost string, masterPort string) {
 			break
 		}
 
-		response := handleCommand(session, cmd)
+		response := server.HandleCommand(session, cmd)
 		if strings.Contains(response, "REPLCONF") {
 			conn.Write([]byte(response))
 		}
@@ -98,7 +98,7 @@ func handshake(masterHost string, masterPort string) {
 	}
 }
 
-func (server *Server) handlePsync(session *Session) string {
+func (server *Server) HandlePsync(session *Session) string {
 	emptyRdbHex := "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0dfb8ea"
 	rdbBytes, _ := hex.DecodeString(emptyRdbHex)
 
@@ -117,7 +117,7 @@ func (server *Server) handlePsync(session *Session) string {
 	return ""
 }
 
-func (server *Server) handleReplconf(session *Session, arr []string) string {
+func (server *Server) HandleReplconf(session *Session, arr []string) string {
 	if len(arr) < 1 {
 		return "-ERR Invalid arguments"
 	}
@@ -142,7 +142,7 @@ func (server *Server) handleReplconf(session *Session, arr []string) string {
 	return "+OK\r\n"
 }
 
-func (server *Server) handleWait(arr []string) string {
+func (server *Server) HandleWait(arr []string) string {
 	if len(arr) < 3 {
 		return "-ERR Missing arguments. Please try: WAIT <num> <timeout>\r\n"
 	}

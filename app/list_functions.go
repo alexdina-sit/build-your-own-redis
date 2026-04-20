@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func (server *Server) handlePush(arr []string, direction Direction) string {
+func (server *Server) HandlePush(arr []string, direction Direction) string {
 	if len(arr) < 3 {
 		return "-ERR Missing arguments, your input should be: RPUSH <lname> <value_1>.."
 	}
@@ -27,7 +27,7 @@ func (server *Server) handlePush(arr []string, direction Direction) string {
 	return fmt.Sprintf(":%d\r\n", len(server.listsMap[arr[1]]))
 }
 
-func (server *Server) handleLrange(arr []string) string {
+func (server *Server) HandleLrange(arr []string) string {
 	if len(arr) < 4 {
 		return "-ERR Missing arguments, your input should be: LRANGE <lname> <start> <stop>"
 	}
@@ -84,7 +84,7 @@ func (server *Server) handleLrange(arr []string) string {
 	return sb.String()
 }
 
-func (server *Server) handleLlen(arr []string) string {
+func (server *Server) HandleLlen(arr []string) string {
 	if len(arr) < 2 {
 		return "-Missing arguments. Your input should be: LLEN <list_key>\r\n"
 	}
@@ -94,7 +94,7 @@ func (server *Server) handleLlen(arr []string) string {
 	return fmt.Sprintf(":%d\r\n", len(server.listsMap[arr[1]]))
 }
 
-func (server *Server) handleLpop(arr []string) string {
+func (server *Server) HandleLpop(arr []string) string {
 	if len(arr) < 2 {
 		return "-Missing arguments. Your input should be: LPOP <list_key>\r\n"
 	}
@@ -143,7 +143,7 @@ func (server *Server) handleLpop(arr []string) string {
 
 }
 
-func (server *Server) handleBlpop(arr []string) string {
+func (server *Server) HandleBlpop(arr []string) string {
 	if len(arr) < 3 {
 		return "-Missing arguments. Your input should be: BLPOP <list_key> <timeout>\r\n"
 	}
